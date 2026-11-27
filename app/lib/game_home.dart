@@ -7,6 +7,8 @@ import 'auth/auth_controller.dart';
 import 'core/neuro_theme.dart';
 import 'core/practice_progress.dart';
 import 'core/practice_widgets.dart';
+import 'games/caro/caro_screen.dart';
+import 'games/sliding/sliding_screen.dart';
 import 'sudoku/sudoku_api.dart';
 import 'sudoku/sudoku_puzzle.dart';
 import 'sudoku/sudoku_screen.dart';
@@ -517,14 +519,14 @@ class _SkillLibrary extends StatelessWidget {
           ),
           const _GameRow(
             title: 'Khối lập phương 3D',
-            description: 'Tìm quy luật xoay',
+            description: 'Tìm quy luật xoay · Sắp có',
             icon: Icons.view_in_ar_outlined,
             color: NeuroTheme.cube,
             background: NeuroTheme.cubeFill,
           ),
         ],
       ),
-      const _SkillGroup(
+      _SkillGroup(
         title: 'Không gian và lập kế hoạch',
         games: [
           _GameRow(
@@ -533,10 +535,13 @@ class _SkillLibrary extends StatelessWidget {
             icon: Icons.dashboard_customize_outlined,
             color: NeuroTheme.sliding,
             background: NeuroTheme.slidingFill,
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(builder: (_) => const SlidingScreen()),
+            ),
           ),
         ],
       ),
-      const _SkillGroup(
+      _SkillGroup(
         title: 'Chiến thuật và dự đoán',
         games: [
           _GameRow(
@@ -545,6 +550,9 @@ class _SkillLibrary extends StatelessWidget {
             icon: Icons.close,
             color: NeuroTheme.caro,
             background: NeuroTheme.caroFill,
+            onTap: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute<void>(builder: (_) => const CaroScreen())),
           ),
         ],
       ),
@@ -631,9 +639,7 @@ class _GameRow extends StatelessWidget {
               children: [
                 Text(title, style: type.titleMedium),
                 Text(
-                  onTap == null && title != 'Sudoku'
-                      ? '$description · Sắp có'
-                      : description,
+                  description,
                   style: type.bodyMedium?.copyWith(color: NeuroTheme.muted),
                 ),
               ],
