@@ -50,6 +50,10 @@ before(async () => {
 after(async () => {
   try {
     if (schemaReady) {
+      await pool.execute(
+        'DELETE game_sessions FROM game_sessions JOIN users ON users.id = game_sessions.user_id WHERE users.username LIKE ?',
+        [`${prefix}%`],
+      );
       await pool.execute('DELETE FROM users WHERE username LIKE ?', [`${prefix}%`]);
     }
   } finally {
@@ -57,10 +61,16 @@ after(async () => {
   }
 });
 
-async function authApi(context) {
+async function startApi(context) {
   const { server, request } = await serve(createApp({ pool, jwtSecrets }));
   context.after(() => close(server));
-  return (endpoint, options) => request(`/api/auth/${endpoint}`, options);
+  const auth = (endpoint, options) => request(`/api/auth/${endpoint}`, options);
+  return { request, auth };
+}
+
+async function authApi(context) {
+  const { auth } = await startApi(context);
+  return auth;
 }
 
 function credentials(overrides = {}) {
@@ -275,4 +285,95 @@ test('logout with a previously rotated refresh token revokes only that session w
   assert.equal(revokedRefresh.status, 401);
   const unaffected = await api('refresh', { body: { refreshToken: separate.refreshToken } });
   assert.equal(unaffected.status, 200);
+});
+
+test('Sudoku creates an active puzzle with its own authenticated user and a reproducible server seed', async (context) => {
+  const { request, auth } = await startApi(context);
+  const accounts = [credentials(), credentials()];
+  const users = await Promise.all(accounts.map((account) => register(auth, account)));
+  const tokens = await Promise.all(accounts.map((account) => login(auth, account)));
+  const [[{ start }]] = await pool.query('SELECT UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) AS start');
+
+  const responses = await Promise.all(tokens.map(({ accessToken }) =>
+    request('/api/games/sudoku/new', { body: { difficulty: 'easy' }, accessToken })));
+  for (const response of responses) assert.equal(response.status, 201);
+
+  const [{ generateSudoku }, payloads] = await Promise.all([
+    import('../src/sudoku/generator.ts'),
+    Promise.all(responses.map((response) => response.json())),
+  ]);
+  assert.notEqual(payloads[0].sessionId, payloads[1].sessionId);
+  for (const [index, payload] of payloads.entries()) {
+    assert.equal(responses[index].headers.get('cache-control'), 'no-store');
+    assert.deepEqual(Object.keys(payload).sort(), ['difficulty', 'puzzle', 'sessionId']);
+    assert.match(payload.sessionId, /^[1-9][0-9]*$/);
+    assert.equal(payload.difficulty, 'easy');
+    assert.equal(payload.puzzle.length, 81);
+    assert.ok(payload.puzzle.every((digit) => Number.isInteger(digit) && digit >= 0 && digit <= 9));
+    assert.equal(payload.puzzle.filter(Boolean).length, 42);
+
+    const [[session]] = await pool.execute(
+      `SELECT CAST(game_sessions.user_id AS CHAR) AS userId, games.code, game_sessions.difficulty,
+              game_sessions.seed, game_sessions.status, UNIX_TIMESTAMP(started_at) AS started,
+              UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) AS now, finished_at AS finishedAt
+       FROM game_sessions JOIN games ON games.id = game_sessions.game_id
+       WHERE game_sessions.id = CAST(? AS UNSIGNED)`, [payload.sessionId]);
+    assert.equal(session.userId, users[index].id);
+    assert.equal(session.code, 'sudoku');
+    assert.equal(session.difficulty, 'easy');
+    assert.equal(session.status, 'active');
+    assert.equal(session.finishedAt, null);
+    assert.ok(Number(session.started) >= Number(start));
+    assert.ok(Number(session.started) <= Number(session.now));
+    assert.match(session.seed, /^sudoku-v1:[a-f0-9]{32}$/);
+    assert.deepEqual(generateSudoku(session.seed).puzzle, payload.puzzle);
+  }
+});
+
+test('Sudoku rejects missing, expired and wrong-type bearer tokens and expired or revoked MySQL sessions', async (context) => {
+  const { request, auth } = await startApi(context);
+  const account = credentials();
+  const user = await register(auth, account);
+  const first = await login(auth, account);
+  const second = await login(auth, account);
+  const claims = jwt.decode(first.accessToken);
+
+  const assertUnauthorized = async (accessToken) => {
+    const response = await request('/api/games/sudoku/new', { body: { difficulty: 'easy' }, accessToken });
+    assert.equal(response.status, 401);
+    assert.equal(response.headers.get('cache-control'), 'no-store');
+    assert.deepEqual(Object.keys(await response.json()), ['error']);
+  };
+  await assertUnauthorized(undefined);
+  await assertUnauthorized('malformed');
+  await assertUnauthorized(jwt.sign({ ...claims, exp: claims.iat - 1 }, jwtSecrets.access));
+  await assertUnauthorized(first.refreshToken);
+
+  await pool.execute('UPDATE auth_sessions SET expires_at = UTC_TIMESTAMP(3) - INTERVAL 1 SECOND WHERE id = ?',
+    [claims.sid]);
+  await assertUnauthorized(first.accessToken);
+
+  const logout = await auth('logout', { body: { refreshToken: second.refreshToken } });
+  assert.equal(logout.status, 204);
+  await assertUnauthorized(second.accessToken);
+
+  const [[{ total }]] = await pool.execute('SELECT COUNT(*) AS total FROM game_sessions WHERE user_id = ?', [user.id]);
+  assert.equal(Number(total), 0);
+});
+
+test('Sudoku rejects malformed input and unsupported difficulty without creating sessions', async (context) => {
+  const { request, auth } = await startApi(context);
+  const account = credentials();
+  const user = await register(auth, account);
+  const { accessToken } = await login(auth, account);
+
+  for (const body of ['', [], null, {}, '{broken json', { difficulty: 'medium' }, { difficulty: 'hard' },
+    { difficulty: 'EASY' }, { difficulty: 1 }, { difficulty: 'easy', userId: '1' }]) {
+    const response = await request('/api/games/sudoku/new', { body, accessToken });
+    assert.equal(response.status, 400, JSON.stringify(body));
+    assert.deepEqual(Object.keys(await response.json()), ['error']);
+  }
+
+  const [[{ total }]] = await pool.execute('SELECT COUNT(*) AS total FROM game_sessions WHERE user_id = ?', [user.id]);
+  assert.equal(Number(total), 0);
 });

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:game_tri_tue/auth/auth_controller.dart';
 import 'package:game_tri_tue/auth/auth_models.dart';
@@ -119,6 +121,94 @@ void main() {
       expect(storage.token, isNull);
     },
   );
+
+  test(
+    'retries a protected game request once with a fresh access token',
+    () async {
+      await controller.login('player', 'test password');
+      final attempts = <String>[];
+      final result = await controller.requestWithSession((access) async {
+        attempts.add(access);
+        if (access == 'access-0') {
+          throw const AuthRequestException('Hết hạn', statusCode: 401);
+        }
+        return 'new game';
+      });
+      expect(result, 'new game');
+      expect(attempts, ['access-0', 'access-1']);
+      expect(api.refreshCount, 1);
+      expect(storage.token, 'refresh-1');
+    },
+  );
+
+  test(
+    'returns to sign in when the game request cannot renew its session',
+    () async {
+      await controller.login('player', 'test password');
+      api.refreshFailure = const AuthRequestException(
+        'Hết phiên',
+        statusCode: 401,
+      );
+      await expectLater(
+        controller.requestWithSession<String>((_) async {
+          throw const AuthRequestException('Hết hạn', statusCode: 401);
+        }),
+        throwsA(isA<AuthRequestException>()),
+      );
+      expect(controller.phase, AuthPhase.signedOut);
+      expect(storage.token, isNull);
+    },
+  );
+
+  test('queues one resume check behind an in-flight game request', () async {
+    await controller.login('player', 'test password');
+    final started = Completer<void>();
+    final reply = Completer<String>();
+    final game = controller.requestWithSession((_) {
+      started.complete();
+      return reply.future;
+    });
+    await started.future;
+    const revoked = AuthRequestException(
+      'Phiên đã bị thu hồi',
+      statusCode: 401,
+    );
+    api.profileFailure = revoked;
+    api.refreshFailure = revoked;
+    final resumed = controller.reloadProfile();
+    final anotherResume = controller.reloadProfile();
+    reply.complete('new game');
+
+    expect(anotherResume, same(resumed));
+    await game;
+    await resumed;
+    expect(controller.phase, AuthPhase.signedOut);
+  });
+
+  test(
+    'invalidates memory immediately and retries failed token deletion',
+    () async {
+      await controller.login('player', 'test password');
+      storage.failNextClear = true;
+      const revoked = AuthRequestException(
+        'Phiên đã bị thu hồi',
+        statusCode: 401,
+      );
+      api.refreshFailure = revoked;
+      await expectLater(
+        controller.requestWithSession<String>((_) async => throw revoked),
+        throwsA(isA<AuthRequestException>()),
+      );
+      expect(controller.phase, AuthPhase.signedOut);
+      expect(controller.user, isNull);
+      expect(storage.token, 'refresh-0');
+
+      await controller.restore();
+      expect(storage.token, isNull);
+      expect(controller.phase, AuthPhase.signedOut);
+      expect(api.refreshCount, 0);
+    },
+  );
 }
 
 final class FakeAuthApi implements AuthApi {
@@ -171,6 +261,7 @@ final class FakeAuthApi implements AuthApi {
 final class MemoryTokenStore implements RefreshTokenStore {
   String? token;
   bool failNextWrite = false;
+  bool failNextClear = false;
 
   @override
   Future<String?> read() async => token;
@@ -185,5 +276,11 @@ final class MemoryTokenStore implements RefreshTokenStore {
   }
 
   @override
-  Future<void> clear() async => token = null;
+  Future<void> clear() async {
+    if (failNextClear) {
+      failNextClear = false;
+      throw Exception('Storage unavailable');
+    }
+    token = null;
+  }
 }

@@ -1,27 +1,19 @@
 import { randomUUID, timingSafeEqual } from 'node:crypto';
 import bcrypt from 'bcrypt';
 import express from 'express';
-import type { ErrorRequestHandler } from 'express';
+import type { ErrorRequestHandler, RequestHandler } from 'express';
 import { rateLimit } from 'express-rate-limit';
 import type { Pool, RowDataPacket } from 'mysql2/promise';
-import type { JwtSecrets } from '../config/env.ts';
 import { readLogin, readRefreshToken, readRegistration } from './input.ts';
-import { createTokens, refreshDigest, sessionLifetime, unixTime } from './tokens.ts';
-import type { SessionClaims } from './tokens.ts';
+import { invalidSession } from './live-session.ts';
+import type { UserProfile } from './live-session.ts';
+import { refreshDigest, sessionLifetime, unixTime } from './tokens.ts';
+import type { createTokens, SessionClaims } from './tokens.ts';
 
 const invalidInput = { error: 'Dữ liệu xác thực không hợp lệ.' };
 const invalidLogin = { error: 'Tên đăng nhập, email hoặc mật khẩu không đúng.' };
-const invalidSession = { error: 'Phiên đăng nhập không hợp lệ hoặc đã hết hạn.' };
 const passwordCost = 12;
 const fallbackHash = '$2b$12$Kv/C0uMohsH2iohmXCIwuuYcsQfWyveXbMthqbt9AzauWezDHDp6a';
-
-interface UserProfile {
-  id: string;
-  username: string;
-  email: string;
-  displayName: string;
-  avatarUrl: string | null;
-}
 
 function authLimit(limit: number) {
   return rateLimit({
@@ -38,10 +30,9 @@ function sessionExpiry(session: SessionClaims): Date {
   return new Date(session.expiresAt * 1000);
 }
 
-export function createAuthRouter(pool: Pool, jwtSecrets: JwtSecrets, accessTokenTtlSeconds?: number) {
+export function createAuthRouter(pool: Pool, tokens: ReturnType<typeof createTokens>, authenticate: RequestHandler) {
   const router = express.Router();
   const json = express.json({ limit: '16kb' });
-  const tokens = createTokens(jwtSecrets, accessTokenTtlSeconds);
 
   router.use((_request, response, next) => {
     response.set('Cache-Control', 'no-store');
@@ -99,24 +90,7 @@ export function createAuthRouter(pool: Pool, jwtSecrets: JwtSecrets, accessToken
     return response.json(pair);
   });
 
-  router.get('/me', async (request, response, next) => {
-    const match = /^Bearer ([^\s]+)$/i.exec(request.get('Authorization') ?? '');
-    const session = match && tokens.verify(match[1], 'access');
-    if (!session) return response.status(401).json(invalidSession);
-
-    const [[user]] = await pool.execute<(RowDataPacket & UserProfile)[]>(
-      `SELECT CAST(users.id AS CHAR) AS id, users.username, users.email,
-              users.display_name AS displayName, users.avatar_url AS avatarUrl
-       FROM auth_sessions JOIN users ON users.id = auth_sessions.user_id
-       WHERE auth_sessions.id = ? AND auth_sessions.user_id = CAST(? AS UNSIGNED)
-         AND auth_sessions.revoked_at IS NULL AND auth_sessions.expires_at > UTC_TIMESTAMP(3)`,
-      [session.sessionId, session.userId],
-    );
-    if (!user) return response.status(401).json(invalidSession);
-
-    response.locals.user = user;
-    next();
-  }, (_request, response) => response.json({ user: response.locals.user }));
+  router.get('/me', authenticate, (_request, response) => response.json({ user: response.locals.user }));
 
   async function rotateRefreshToken(session: SessionClaims, refreshToken: string) {
     const connection = await pool.getConnection();

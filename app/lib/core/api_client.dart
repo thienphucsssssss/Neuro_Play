@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 
 import '../auth/auth_models.dart';
+import '../sudoku/sudoku_puzzle.dart';
 
 class ApiClient implements AuthApi {
   final _http = Dio(
@@ -20,6 +21,17 @@ class ApiClient implements AuthApi {
       throw StateError('Unexpected response from /health');
     }
   }
+
+  Future<SudokuPuzzle> newSudoku(String accessToken) => _request(() async {
+    final response = await _http.post<Map<String, dynamic>>(
+      '/api/games/sudoku/new',
+      data: {'difficulty': 'easy'},
+      options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
+    );
+    final body = response.data;
+    if (body == null) throw const FormatException('Missing Sudoku puzzle');
+    return SudokuPuzzle.fromJson(body);
+  });
 
   @override
   Future<void> register(Registration registration) => _request(() async {

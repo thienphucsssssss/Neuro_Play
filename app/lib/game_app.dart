@@ -5,11 +5,14 @@ import 'package:provider/provider.dart';
 
 import 'auth/auth_controller.dart';
 import 'auth/auth_screens.dart';
+import 'sudoku/sudoku_puzzle.dart';
+import 'sudoku/sudoku_screen.dart';
 
 class GameApp extends StatelessWidget {
-  const GameApp({required this.checkApi, super.key});
+  const GameApp({required this.checkApi, required this.newSudoku, super.key});
 
   final Future<void> Function() checkApi;
+  final Future<SudokuPuzzle> Function(String) newSudoku;
 
   @override
   Widget build(BuildContext context) => MaterialApp(
@@ -21,21 +24,25 @@ class GameApp extends StatelessWidget {
       ),
     ),
     debugShowCheckedModeBanner: false,
-    home: _AuthGate(checkApi: checkApi),
+    home: _AuthGate(checkApi: checkApi, newSudoku: newSudoku),
   );
 }
 
 class _AuthGate extends StatelessWidget {
-  const _AuthGate({required this.checkApi});
+  const _AuthGate({required this.checkApi, required this.newSudoku});
 
   final Future<void> Function() checkApi;
+  final Future<SudokuPuzzle> Function(String) newSudoku;
 
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthController>();
     return switch (auth.phase) {
       AuthPhase.signedOut => const SignInScreen(),
-      AuthPhase.signedIn => _HomeScreen(auth: auth, checkApi: checkApi),
+      AuthPhase.signedIn => _SignedInNavigator(
+        checkApi: checkApi,
+        newSudoku: newSudoku,
+      ),
       AuthPhase.loading || AuthPhase.retry => Scaffold(
         appBar: AppBar(title: const Text('Neuro Play')),
         body: Center(
@@ -63,11 +70,41 @@ class _AuthGate extends StatelessWidget {
   }
 }
 
-class _HomeScreen extends StatefulWidget {
-  const _HomeScreen({required this.auth, required this.checkApi});
+class _SignedInNavigator extends StatefulWidget {
+  const _SignedInNavigator({required this.checkApi, required this.newSudoku});
 
-  final AuthController auth;
   final Future<void> Function() checkApi;
+  final Future<SudokuPuzzle> Function(String) newSudoku;
+
+  @override
+  State<_SignedInNavigator> createState() => _SignedInNavigatorState();
+}
+
+class _SignedInNavigatorState extends State<_SignedInNavigator> {
+  final _navigator = GlobalKey<NavigatorState>();
+
+  @override
+  Widget build(BuildContext context) => NavigatorPopHandler<Object?>(
+    onPopWithResult: (result) {
+      final navigator = _navigator.currentState;
+      if (navigator != null) unawaited(navigator.maybePop(result));
+    },
+    child: Navigator(
+      key: _navigator,
+      onGenerateRoute: (settings) => MaterialPageRoute<void>(
+        settings: settings,
+        builder: (_) =>
+            _HomeScreen(checkApi: widget.checkApi, newSudoku: widget.newSudoku),
+      ),
+    ),
+  );
+}
+
+class _HomeScreen extends StatefulWidget {
+  const _HomeScreen({required this.checkApi, required this.newSudoku});
+
+  final Future<void> Function() checkApi;
+  final Future<SudokuPuzzle> Function(String) newSudoku;
 
   @override
   State<_HomeScreen> createState() => _HomeScreenState();
@@ -80,7 +117,7 @@ class _HomeScreenState extends State<_HomeScreen> {
   void initState() {
     super.initState();
     _lifecycle = AppLifecycleListener(
-      onResume: () => unawaited(widget.auth.reloadProfile()),
+      onResume: () => unawaited(context.read<AuthController>().reloadProfile()),
     );
   }
 
@@ -92,8 +129,9 @@ class _HomeScreenState extends State<_HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final controller = widget.auth;
-    final user = controller.user!;
+    final controller = context.watch<AuthController>();
+    final user = controller.user;
+    if (user == null) return const SizedBox.shrink();
     return Scaffold(
       appBar: AppBar(title: const Text('Neuro Play')),
       body: SafeArea(
@@ -110,6 +148,22 @@ class _HomeScreenState extends State<_HomeScreen> {
                     style: Theme.of(context).textTheme.headlineSmall,
                   ),
                   Text('@${user.username}'),
+                  const SizedBox(height: 24),
+                  FilledButton.icon(
+                    onPressed: controller.busy
+                        ? null
+                        : () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => SudokuScreen(
+                                loadPuzzle: () => controller.requestWithSession(
+                                  widget.newSudoku,
+                                ),
+                              ),
+                            ),
+                          ),
+                    icon: const Icon(Icons.grid_on),
+                    label: const Text('Sudoku'),
+                  ),
                   const SizedBox(height: 24),
                   HealthStatus(checkApi: widget.checkApi),
                   if (controller.message case final message?) ...[

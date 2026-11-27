@@ -14,7 +14,7 @@ void main() {
       create: (_) =>
           AuthController(api: api, tokenStore: const SecureTokenStore())
             ..restore(),
-      child: GameApp(checkApi: api.checkHealth),
+      child: GameApp(checkApi: api.checkHealth, newSudoku: api.newSudoku),
     ),
   );
 }

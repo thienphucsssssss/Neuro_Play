@@ -30,6 +30,8 @@ flutter run -d <device-id>
 
 Trong app, chọn **Tạo tài khoản**, đăng nhập bằng email hoặc username, rồi đóng và mở lại app để thử khôi phục phiên. Nút **Đăng xuất** thu hồi phiên đang dùng. Các phiên trên thiết bị khác tiếp tục hoạt động.
 
+Sau khi đăng nhập, mở **Sudoku** để chơi một đề Dễ 9×9. Chọn ô trống và dùng bàn phím số, **Xóa** hoặc **Ghi chú**. App báo các số trùng và tự nhận diện khi giải xong. Bàn đang mở giữ tiến độ khi app xuống nền. Khi rời bàn, lần mở tiếp theo sẽ tạo đề mới.
+
 ## MySQL
 
 Mở MySQL client bằng tài khoản quản trị tại thư mục dự án. Tạo database `game_tri_tue` rồi nạp schema.
@@ -63,4 +65,4 @@ $dbData = Join-Path $env:LOCALAPPDATA 'GameTriTue/MySQL/data'
 
 Chạy `npm.cmd test` và `npm.cmd run build` trong `server/`. Để chạy `npm.cmd run test:auth`, cấu hình `AUTH_TEST_DB_NAME`, `AUTH_TEST_DB_USER`, `AUTH_TEST_DB_PASSWORD`, và khi cần `AUTH_TEST_DB_HOST`, `AUTH_TEST_DB_PORT` trong `server/.env.auth-test`. Dùng schema thử nghiệm riêng có tên kết thúc bằng `_test` và cấp thêm quyền `CREATE`, `REFERENCES` cho tài khoản test để bộ kiểm thử tự nạp migration.
 
-Chạy `flutter analyze` và `flutter test` trong `app/`. Xem [thiết kế Tuần 1](docs/week-1.md) và [hợp đồng xác thực Tuần 2](docs/week-2-auth-plan.md).
+Chạy `flutter analyze` và `flutter test` trong `app/`. Xem [thiết kế Tuần 1](docs/week-1.md), [hợp đồng xác thực Tuần 2](docs/week-2-auth-plan.md) và [kế hoạch Sudoku Tuần 3](docs/week-3-sudoku-plan.md).

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import 'auth_models.dart';
@@ -16,15 +18,38 @@ final class AuthController extends ChangeNotifier {
   String? _accessToken;
   String? _refreshToken;
   AuthTokens? _tokensAwaitingWrite;
-  Future<AuthTokens>? _refreshInFlight;
-  bool _busy = false;
+  Future<void>? _workFinished;
+  Future<void>? _profileReload;
+  int _sessionVersion = 0;
+  bool _storageNeedsClear = false;
   bool _profileRetry = false;
 
   AuthPhase get phase => _phase;
   AuthUser? get user => _user;
   String? get message => _message;
-  bool get busy => _busy;
+  bool get busy => _workFinished != null;
   bool get profileRetry => _profileRetry;
+
+  Future<T> requestWithSession<T>(Future<T> Function(String) send) =>
+      _withCurrentSession(
+        () async {
+          try {
+            await _persistTokens();
+            return await _withAccessToken(send);
+          } on AuthRequestException catch (error) {
+            if (error.statusCode == 401) {
+              await _clearSession(
+                message: 'Phiên đã hết hạn. Vui lòng đăng nhập lại.',
+              );
+            }
+            rethrow;
+          }
+        },
+        onSessionChanged: () => throw const AuthRequestException(
+          'Vui lòng đăng nhập lại.',
+          statusCode: 401,
+        ),
+      );
 
   Future<void> restore() => _run(() async {
     _phase = AuthPhase.loading;
@@ -34,18 +59,23 @@ final class AuthController extends ChangeNotifier {
 
   Future<void> login(String identifier, String password) => _run(() async {
     _tokensAwaitingWrite = await api.login(identifier, password);
+    _sessionVersion++;
     await _restoreProfile();
   });
 
-  Future<void> reloadProfile() => _run(() async {
-    if (_phase != AuthPhase.signedIn) return;
-    try {
-      await _loadProfile();
-    } on Exception catch (error) {
-      _message = authErrorMessage(error);
-      _profileRetry = true;
-    }
-  });
+  Future<void> reloadProfile() => _profileReload ??=
+      _withCurrentSession<void>(() async {
+        _message = null;
+        _profileRetry = false;
+        try {
+          await _loadProfile();
+        } on Exception catch (error) {
+          _message = authErrorMessage(error);
+          _profileRetry = true;
+        }
+      }, onSessionChanged: () {}).whenComplete(() {
+        _profileReload = null;
+      });
 
   Future<void> logout() => _run(() async {
     final token = _tokensAwaitingWrite?.refreshToken ?? _refreshToken;
@@ -63,15 +93,38 @@ final class AuthController extends ChangeNotifier {
   });
 
   Future<void> _run(Future<void> Function() operation) async {
-    if (_busy) return;
-    _busy = true;
+    if (busy) return;
     _message = null;
     _profileRetry = false;
+    await _withWork(operation);
+  }
+
+  Future<T> _withCurrentSession<T>(
+    Future<T> Function() operation, {
+    required T Function() onSessionChanged,
+  }) async {
+    if (_phase != AuthPhase.signedIn) return onSessionChanged();
+    final version = _sessionVersion;
+    var pending = _workFinished;
+    while (pending != null) {
+      await pending;
+      pending = _workFinished;
+    }
+    if (_phase != AuthPhase.signedIn || version != _sessionVersion) {
+      return onSessionChanged();
+    }
+    return _withWork(operation);
+  }
+
+  Future<T> _withWork<T>(Future<T> Function() operation) async {
+    final finished = Completer<void>();
+    _workFinished = finished.future;
     notifyListeners();
     try {
-      await operation();
+      return await operation();
     } finally {
-      _busy = false;
+      _workFinished = null;
+      finished.complete();
       notifyListeners();
     }
   }
@@ -79,6 +132,7 @@ final class AuthController extends ChangeNotifier {
   Future<void> _restoreProfile() async {
     try {
       if (_tokensAwaitingWrite == null) {
+        await _clearStoredSession();
         _refreshToken ??= await tokenStore.read();
       }
       if (_refreshToken == null && _tokensAwaitingWrite == null) {
@@ -95,7 +149,7 @@ final class AuthController extends ChangeNotifier {
   Future<void> _loadProfile() async {
     try {
       await _persistTokens();
-      _user = await _authorizedProfile();
+      _user = await _withAccessToken(api.me);
       _phase = AuthPhase.signedIn;
     } on AuthRequestException catch (error) {
       if (error.statusCode != 401) rethrow;
@@ -103,22 +157,15 @@ final class AuthController extends ChangeNotifier {
     }
   }
 
-  Future<AuthUser> _authorizedProfile() async {
-    final accessToken = _accessToken ?? (await _refresh()).accessToken;
+  Future<T> _withAccessToken<T>(Future<T> Function(String) send) async {
+    final accessToken = _accessToken ?? (await _rotate()).accessToken;
     try {
-      return await api.me(accessToken);
+      return await send(accessToken);
     } on AuthRequestException catch (error) {
       if (error.statusCode != 401) rethrow;
-      final updated = _accessToken;
-      if (updated != null && updated != accessToken) return api.me(updated);
-      return api.me((await _refresh()).accessToken);
+      return send((await _rotate()).accessToken);
     }
   }
-
-  Future<AuthTokens> _refresh() =>
-      _refreshInFlight ??= _rotate().whenComplete(() {
-        _refreshInFlight = null;
-      });
 
   Future<AuthTokens> _rotate() async {
     final token = _refreshToken;
@@ -135,19 +182,33 @@ final class AuthController extends ChangeNotifier {
     final tokens = _tokensAwaitingWrite;
     if (tokens == null) return;
     await tokenStore.write(tokens.refreshToken);
+    _storageNeedsClear = false;
     _refreshToken = tokens.refreshToken;
     _accessToken = tokens.accessToken;
     _tokensAwaitingWrite = null;
   }
 
   Future<void> _clearSession({String? message}) async {
-    await tokenStore.clear();
+    _sessionVersion++;
     _accessToken = null;
     _refreshToken = null;
     _tokensAwaitingWrite = null;
     _user = null;
     _message = message;
     _phase = AuthPhase.signedOut;
+    _storageNeedsClear = true;
+    notifyListeners();
+    try {
+      await _clearStoredSession();
+    } on Exception {
+      _message = 'Phiên đã kết thúc. Không thể xóa dữ liệu phiên cục bộ.';
+    }
+  }
+
+  Future<void> _clearStoredSession() async {
+    if (!_storageNeedsClear) return;
+    await tokenStore.clear();
+    _storageNeedsClear = false;
   }
 }
 
