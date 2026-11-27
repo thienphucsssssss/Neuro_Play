@@ -1,9 +1,10 @@
 import 'package:dio/dio.dart';
 
 import '../auth/auth_models.dart';
+import '../sudoku/sudoku_api.dart';
 import '../sudoku/sudoku_puzzle.dart';
 
-class ApiClient implements AuthApi {
+class ApiClient implements AuthApi, SudokuApi {
   final _http = Dio(
     BaseOptions(
       baseUrl: const String.fromEnvironment(
@@ -22,15 +23,42 @@ class ApiClient implements AuthApi {
     }
   }
 
-  Future<SudokuPuzzle> newSudoku(String accessToken) => _request(() async {
+  @override
+  Future<SudokuPuzzle> newSudoku(
+    String accessToken,
+    SudokuDifficulty difficulty,
+  ) => _sudoku('new', accessToken, {
+    'difficulty': difficulty.name,
+  }, SudokuPuzzle.fromJson);
+
+  @override
+  Future<SudokuMoveReceipt> moveSudoku(String accessToken, SudokuMove move) =>
+      _sudoku('move', accessToken, move.toJson(), SudokuMoveReceipt.fromJson);
+
+  @override
+  Future<SudokuResult> submitSudoku(
+    String accessToken,
+    String sessionId,
+    List<int> board,
+  ) => _sudoku('submit', accessToken, {
+    'sessionId': sessionId,
+    'board': board,
+  }, SudokuResult.fromJson);
+
+  Future<T> _sudoku<T>(
+    String route,
+    String accessToken,
+    Map<String, Object> data,
+    T Function(Map<String, dynamic>) parse,
+  ) => _request(() async {
     final response = await _http.post<Map<String, dynamic>>(
-      '/api/games/sudoku/new',
-      data: {'difficulty': 'easy'},
+      '/api/games/sudoku/$route',
+      data: data,
       options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
     );
     final body = response.data;
-    if (body == null) throw const FormatException('Missing Sudoku puzzle');
-    return SudokuPuzzle.fromJson(body);
+    if (body == null) throw const FormatException('Missing Sudoku response');
+    return parse(body);
   });
 
   @override

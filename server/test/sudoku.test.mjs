@@ -32,9 +32,20 @@ function solveIndependently(puzzle) {
       return;
     }
 
+    const candidatesFor = ([, row, column, box]) => digits.filter((digit) =>
+      !rows[row].has(digit) && !columns[column].has(digit) && !boxes[box].has(digit));
+    let best = blank;
+    let candidates = candidatesFor(blanks[best]);
+    for (let index = blank + 1; index < blanks.length && candidates.length > 1; index++) {
+      const next = candidatesFor(blanks[index]);
+      if (next.length >= candidates.length) continue;
+      best = index;
+      candidates = next;
+    }
+
+    [blanks[blank], blanks[best]] = [blanks[best], blanks[blank]];
     const [index, row, column, box] = blanks[blank];
-    for (const digit of digits) {
-      if (rows[row].has(digit) || columns[column].has(digit) || boxes[box].has(digit)) continue;
+    for (const digit of candidates) {
       board[index] = digit;
       rows[row].add(digit);
       columns[column].add(digit);
@@ -45,6 +56,7 @@ function solveIndependently(puzzle) {
       boxes[box].delete(digit);
       if (solutions.length === 2) break;
     }
+    [blanks[blank], blanks[best]] = [blanks[best], blanks[blank]];
   }
 
   visit(0);
@@ -62,9 +74,18 @@ test('Sudoku v1 generates distinct, reproducible puzzles from representative see
 });
 
 test('Sudoku v1 replays a stored seed with the original puzzle and answer', () => {
-  const { puzzle, solution } = generateSudoku(`sudoku-v1:${'0'.repeat(32)}`);
-  assert.equal(puzzle.join(''), '702581040480002050035007920007005090854306000901200005579024361048010509010000004');
-  assert.equal(solution.join(''), '792581643486932157135467928327145896854396712961278435579824361248613579613759284');
+  const seed = `sudoku-v1:${'0'.repeat(32)}`;
+  for (const args of [[], [50_000], ['easy'], ['easy', 50_000]]) {
+    const { puzzle, solution } = generateSudoku(seed, ...args);
+    assert.equal(puzzle.join(''), '702581040480002050035007920007005090854306000901200005579024361048010509010000004');
+    assert.equal(solution.join(''), '792581643486932157135467928327145896854396712961278435579824361248613579613759284');
+  }
+});
+
+test('Sudoku v1 accepts only its stored easy difficulty', () => {
+  for (const difficulty of ['medium', 'hard']) {
+    assert.throws(() => generateSudoku(representativeSeeds[0], difficulty), /Sudoku v1 supports only easy difficulty/);
+  }
 });
 
 test('easy Sudoku has exactly 42 clues, one valid solution, and a matching answer', () => {
@@ -88,10 +109,43 @@ test('easy Sudoku has exactly 42 clues, one valid solution, and a matching answe
 
 test('Sudoku generation fails closed when it cannot prove a removal within the node budget', () => {
   assert.throws(() => generateSudoku(representativeSeeds[0], 83), SudokuGenerationExhausted);
+  assert.throws(() => generateSudoku(representativeSeeds[0], 'easy', 83), SudokuGenerationExhausted);
 });
 
 test('regeneration rejects malformed seeds and unknown generator versions', () => {
-  for (const seed of ['sudoku-v1:abcd', `sudoku-v2:${'0'.repeat(32)}`]) {
+  for (const seed of ['sudoku-v1:abcd', 'sudoku-v2:abcd', `sudoku-v3:${'0'.repeat(32)}`]) {
     assert.throws(() => generateSudoku(seed), /Unsupported Sudoku seed/);
   }
+});
+
+test('Sudoku v2 is reproducible from the seed and stored difficulty', () => {
+  const seed = `sudoku-v2:${'0'.repeat(32)}`;
+  for (const [difficulty, clues] of [['easy', 42], ['medium', 34], ['hard', 28]]) {
+    const generated = generateSudoku(seed, difficulty);
+    assert.equal(generated.puzzle.filter(Boolean).length, clues);
+    assert.deepEqual(generateSudoku(seed, difficulty), generated);
+  }
+});
+
+test('250 Sudoku v2 seeds per difficulty generate the target clues and exactly one solution', () => {
+  const seeds = ['0'.repeat(32), 'f'.repeat(32), ...Array.from({ length: 248 }, (_, index) =>
+    createHash('sha256').update(`sudoku v2 fixture ${index}`).digest('hex').slice(0, 32))];
+  for (const [difficulty, clues] of [['easy', 42], ['medium', 34], ['hard', 28]]) {
+    const puzzles = new Set();
+    for (const entropy of seeds) {
+      const seed = `sudoku-v2:${entropy}`;
+      const { puzzle, solution } = generateSudoku(seed, difficulty);
+      const label = `${seed} ${difficulty}`;
+      assert.equal(puzzle.length, 81, label);
+      assert.ok(puzzle.every((digit) => digit === 0 || digits.includes(digit)), label);
+      assert.equal(puzzle.filter(Boolean).length, clues, label);
+      assert.deepEqual(solveIndependently(puzzle), [solution], label);
+      puzzles.add(puzzle.join(''));
+    }
+    assert.equal(puzzles.size, seeds.length);
+  }
+});
+
+test('Sudoku v2 refuses to return a puzzle after exhausting its search budget', () => {
+  assert.throws(() => generateSudoku(`sudoku-v2:${'0'.repeat(32)}`, 'hard', 83), SudokuGenerationExhausted);
 });

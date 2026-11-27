@@ -5,14 +5,14 @@ import 'package:provider/provider.dart';
 
 import 'auth/auth_controller.dart';
 import 'auth/auth_screens.dart';
-import 'sudoku/sudoku_puzzle.dart';
+import 'sudoku/sudoku_api.dart';
 import 'sudoku/sudoku_screen.dart';
 
 class GameApp extends StatelessWidget {
-  const GameApp({required this.checkApi, required this.newSudoku, super.key});
+  const GameApp({required this.checkApi, required this.sudokuApi, super.key});
 
   final Future<void> Function() checkApi;
-  final Future<SudokuPuzzle> Function(String) newSudoku;
+  final SudokuApi sudokuApi;
 
   @override
   Widget build(BuildContext context) => MaterialApp(
@@ -24,15 +24,15 @@ class GameApp extends StatelessWidget {
       ),
     ),
     debugShowCheckedModeBanner: false,
-    home: _AuthGate(checkApi: checkApi, newSudoku: newSudoku),
+    home: _AuthGate(checkApi: checkApi, sudokuApi: sudokuApi),
   );
 }
 
 class _AuthGate extends StatelessWidget {
-  const _AuthGate({required this.checkApi, required this.newSudoku});
+  const _AuthGate({required this.checkApi, required this.sudokuApi});
 
   final Future<void> Function() checkApi;
-  final Future<SudokuPuzzle> Function(String) newSudoku;
+  final SudokuApi sudokuApi;
 
   @override
   Widget build(BuildContext context) {
@@ -41,7 +41,7 @@ class _AuthGate extends StatelessWidget {
       AuthPhase.signedOut => const SignInScreen(),
       AuthPhase.signedIn => _SignedInNavigator(
         checkApi: checkApi,
-        newSudoku: newSudoku,
+        sudokuApi: sudokuApi,
       ),
       AuthPhase.loading || AuthPhase.retry => Scaffold(
         appBar: AppBar(title: const Text('Neuro Play')),
@@ -71,10 +71,10 @@ class _AuthGate extends StatelessWidget {
 }
 
 class _SignedInNavigator extends StatefulWidget {
-  const _SignedInNavigator({required this.checkApi, required this.newSudoku});
+  const _SignedInNavigator({required this.checkApi, required this.sudokuApi});
 
   final Future<void> Function() checkApi;
-  final Future<SudokuPuzzle> Function(String) newSudoku;
+  final SudokuApi sudokuApi;
 
   @override
   State<_SignedInNavigator> createState() => _SignedInNavigatorState();
@@ -94,17 +94,17 @@ class _SignedInNavigatorState extends State<_SignedInNavigator> {
       onGenerateRoute: (settings) => MaterialPageRoute<void>(
         settings: settings,
         builder: (_) =>
-            _HomeScreen(checkApi: widget.checkApi, newSudoku: widget.newSudoku),
+            _HomeScreen(checkApi: widget.checkApi, sudokuApi: widget.sudokuApi),
       ),
     ),
   );
 }
 
 class _HomeScreen extends StatefulWidget {
-  const _HomeScreen({required this.checkApi, required this.newSudoku});
+  const _HomeScreen({required this.checkApi, required this.sudokuApi});
 
   final Future<void> Function() checkApi;
-  final Future<SudokuPuzzle> Function(String) newSudoku;
+  final SudokuApi sudokuApi;
 
   @override
   State<_HomeScreen> createState() => _HomeScreenState();
@@ -155,9 +155,8 @@ class _HomeScreenState extends State<_HomeScreen> {
                         : () => Navigator.of(context).push(
                             MaterialPageRoute<void>(
                               builder: (_) => SudokuScreen(
-                                loadPuzzle: () => controller.requestWithSession(
-                                  widget.newSudoku,
-                                ),
+                                api: widget.sudokuApi,
+                                authorize: controller.requestWithSession,
                               ),
                             ),
                           ),

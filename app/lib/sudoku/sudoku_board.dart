@@ -11,6 +11,7 @@ final class SudokuBoard {
   final List<int> _givens;
   final List<int> _values;
   final _notes = List<int>.filled(81, 0);
+  final _wrong = <int>{};
   late Set<int> _conflicts;
 
   int? selected;
@@ -19,6 +20,8 @@ final class SudokuBoard {
   int valueAt(int index) => _values[index];
   int notesAt(int index) => _notes[index];
   bool isGiven(int index) => _givens[index] != 0;
+  bool isWrong(int index) => _wrong.contains(index);
+  List<int> snapshot() => List.unmodifiable(_values);
   Set<int> get conflicts => _conflicts;
   bool get hasProgress => Iterable<int>.generate(81)
       .any((index) => _values[index] != _givens[index] || _notes[index] != 0);
@@ -48,16 +51,24 @@ final class SudokuBoard {
       if (_values[index] == 0) _notes[index] ^= 1 << number;
       return;
     }
-    _values[index] = number;
-    _notes[index] = 0;
-    _updateConflicts();
+    confirmValue(index, number);
   }
 
   void erase() {
     if (!canEdit) return;
-    final index = selected!;
-    _values[index] = 0;
+    confirmValue(selected!, 0);
+  }
+
+  void confirmValue(int index, int value, {bool? correct}) {
+    RangeError.checkValueInInterval(value, 0, 9, 'value');
+    if (isGiven(index) || isComplete) return;
+    _values[index] = value;
     _notes[index] = 0;
+    if (value > 0 && correct == false) {
+      _wrong.add(index);
+    } else {
+      _wrong.remove(index);
+    }
     _updateConflicts();
   }
 

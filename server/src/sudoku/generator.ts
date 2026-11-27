@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 
-const seedPrefix = 'sudoku-v1:';
+const legacySeedPrefix = 'sudoku-v1:';
+const seedPrefix = 'sudoku-v2:';
 const cells = Array.from({ length: 81 }, (_, index) => {
   const row = Math.floor(index / 9);
   const column = index % 9;
@@ -9,11 +10,10 @@ const cells = Array.from({ length: 81 }, (_, index) => {
 });
 const digits = [1, 2, 3, 4, 5, 6, 7, 8, 9];
 const allDigits = 0b1111111110;
-const clueTarget = 42;
-const attemptLimit = 4;
-const nodeLimit = 50_000;
+const clueTargets = { easy: 42, medium: 34, hard: 28 };
 
 type RandomNumber = () => number;
+export type SudokuDifficulty = keyof typeof clueTargets;
 
 interface SearchBudget {
   remaining: number;
@@ -27,6 +27,10 @@ export class SudokuGenerationExhausted extends Error {
 
 export function newSudokuSeed(): string {
   return seedPrefix + randomBytes(16).toString('hex');
+}
+
+export function isSudokuDifficulty(value: unknown): value is SudokuDifficulty {
+  return typeof value === 'string' && Object.hasOwn(clueTargets, value);
 }
 
 function seededRandom(seed: string): RandomNumber {
@@ -123,14 +127,32 @@ function searchSolutions(board: number[], budget: SearchBudget, limit: number, r
   return { count, solution };
 }
 
-// Preserve the v1 ordering and defaults so previously stored seeds can be replayed.
-export function generateSudoku(seed: string, maxNodes = nodeLimit) {
-  if (!seed.startsWith(seedPrefix) || !/^[a-f0-9]{32}$/.test(seed.slice(seedPrefix.length))) {
-    throw new Error('Unsupported Sudoku seed.');
-  }
-  if (!Number.isSafeInteger(maxNodes) || maxNodes < 0) throw new RangeError('Invalid Sudoku node budget.');
+interface SudokuPuzzle {
+  puzzle: number[];
+  solution: number[];
+}
 
-  const random = seededRandom(seed);
+export function generateSudoku(seed: string, maxNodes?: number): SudokuPuzzle;
+export function generateSudoku(seed: string, difficulty: SudokuDifficulty, maxNodes?: number): SudokuPuzzle;
+export function generateSudoku(seed: string, difficultyOrMaxNodes?: SudokuDifficulty | number, requestedMaxNodes?: number) {
+  if (!/^sudoku-v[12]:[a-f0-9]{32}$/.test(seed)) throw new Error('Unsupported Sudoku seed.');
+
+  // Preserve the seed ordering and budget used for stored v1 puzzles.
+  const legacy = seed.startsWith(legacySeedPrefix);
+  const hasDifficulty = typeof difficultyOrMaxNodes === 'string';
+  if (legacy && hasDifficulty && difficultyOrMaxNodes !== 'easy') {
+    throw new Error('Sudoku v1 supports only easy difficulty.');
+  }
+  const difficulty = legacy ? 'easy' : difficultyOrMaxNodes;
+  if (!isSudokuDifficulty(difficulty)) throw new Error('A Sudoku v2 seed requires its difficulty.');
+  const attemptLimit = legacy ? 4 : 8;
+  const nodeLimit = legacy ? 50_000 : 200_000;
+  const maxNodes = (hasDifficulty ? requestedMaxNodes : difficultyOrMaxNodes) ?? nodeLimit;
+  if (typeof maxNodes !== 'number' || !Number.isSafeInteger(maxNodes) || maxNodes < 0) {
+    throw new RangeError('Invalid Sudoku node budget.');
+  }
+
+  const random = seededRandom(legacy ? seed : `${seed}:${difficulty}`);
   const budget = { remaining: Math.min(maxNodes, nodeLimit) };
   for (let attempt = 0; attempt < attemptLimit; attempt++) {
     const blankBoard = Array<number>(cells.length).fill(0);
@@ -144,7 +166,7 @@ export function generateSudoku(seed: string, maxNodes = nodeLimit) {
       puzzle[index] = 0;
       if (searchSolutions(puzzle, budget, 2).count === 1) {
         clues--;
-        if (clues === clueTarget) return { puzzle, solution };
+        if (clues === clueTargets[difficulty]) return { puzzle, solution };
       } else {
         puzzle[index] = solution[index];
       }

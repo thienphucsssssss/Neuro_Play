@@ -4,17 +4,7 @@ import 'package:game_tri_tue/sudoku/sudoku_puzzle.dart';
 import 'package:game_tri_tue/sudoku/sudoku_screen.dart';
 import 'package:material_ui/material_ui.dart';
 
-SudokuPuzzle _puzzle() => SudokuPuzzle.fromJson({
-  'sessionId': '1',
-  'difficulty': 'easy',
-  'puzzle': [
-    for (var index = 0; index < 81; index++)
-      if (index.isEven || index == 1)
-        (index ~/ 9 * 3 + index ~/ 27 + index % 9) % 9 + 1
-      else
-        0,
-  ],
-});
+import 'support/sudoku_fixture.dart';
 
 void main() {
   testWidgets('loads, retries, and confirms before discarding notes', (
@@ -25,6 +15,13 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     var attempts = 0;
+    final api = FakeSudokuApi()
+      ..load = (difficulty) async {
+        if (++attempts == 1) {
+          throw const AuthRequestException('Mất kết nối');
+        }
+        return fixtureSudoku(difficulty);
+      };
     await tester.pumpWidget(
       MaterialApp(
         home: Builder(
@@ -32,14 +29,8 @@ void main() {
             body: TextButton(
               onPressed: () => Navigator.of(context).push(
                 MaterialPageRoute<void>(
-                  builder: (_) => SudokuScreen(
-                    loadPuzzle: () async {
-                      if (++attempts == 1) {
-                        throw const AuthRequestException('Mất kết nối');
-                      }
-                      return _puzzle();
-                    },
-                  ),
+                  builder: (_) =>
+                      SudokuScreen(api: api, authorize: authorizeSudoku),
                 ),
               ),
               child: const Text('Mở Sudoku'),
@@ -50,12 +41,18 @@ void main() {
     );
     await tester.tap(find.text('Mở Sudoku'));
     await tester.pumpAndSettle();
+    expect(find.text('Chọn độ khó'), findsOneWidget);
+    expect(find.text('Vừa'), findsOneWidget);
+    expect(find.text('Khó'), findsOneWidget);
+    await tester.tap(find.text('Dễ'));
+    await tester.pumpAndSettle();
     expect(find.text('Mất kết nối'), findsOneWidget);
     await tester.tap(find.text('Thử lại'));
     await tester.pumpAndSettle();
 
     final given = find.byKey(const ValueKey('sudoku-cell-0'));
-    final editable = find.byKey(const ValueKey('sudoku-cell-3'));
+    final blank = fixtureSudoku(SudokuDifficulty.easy).puzzle.indexOf(0);
+    final editable = find.byKey(ValueKey('sudoku-cell-$blank'));
     final digit = find.byKey(const ValueKey('sudoku-digit-1'));
     await tester.tap(given);
     await tester.pumpAndSettle();
