@@ -1,0 +1,6 @@
+/server/node_modules/
+/server/dist/
+.env
+.env.*
+!.env.example
+*.log
