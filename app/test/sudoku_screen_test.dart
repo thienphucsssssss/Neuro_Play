@@ -1,5 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:game_tri_tue/auth/auth_models.dart';
+import 'package:game_tri_tue/core/neuro_theme.dart';
+import 'package:game_tri_tue/core/practice_progress.dart';
+import 'package:game_tri_tue/sudoku/sudoku_api.dart';
 import 'package:game_tri_tue/sudoku/sudoku_puzzle.dart';
 import 'package:game_tri_tue/sudoku/sudoku_screen.dart';
 import 'package:material_ui/material_ui.dart';
@@ -79,4 +82,82 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Mở Sudoku'), findsOneWidget);
   });
+
+  testWidgets(
+    'daily Sudoku opens the real game and shows progress after save',
+    (tester) async {
+      tester.view.physicalSize = const Size(320, 880);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final puzzle = fixtureSudoku(SudokuDifficulty.medium);
+      final blank = puzzle.puzzle.indexOf(0);
+      final api = FakeSudokuApi()
+        ..load = (difficulty) async {
+          expect(difficulty, SudokuDifficulty.medium);
+          return puzzle;
+        }
+        ..confirm = (move) async {
+          return SudokuMoveReceipt(
+            moveNo: move.moveNo,
+            mistakes: 0,
+            correct: true,
+            elapsedSec: 20,
+            solved: true,
+          );
+        }
+        ..submit = (sessionId, board) async => SudokuResult(
+          sessionId: sessionId,
+          difficulty: SudokuDifficulty.medium,
+          score: 1460,
+          durationSec: 20,
+          mistakes: 0,
+        );
+      final recorded = <SudokuResult>[];
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: NeuroTheme.light(),
+          home: SudokuScreen(
+            api: api,
+            authorize: authorizeSudoku,
+            initialDifficulty: SudokuDifficulty.medium,
+            recordPractice: (result, day) {
+              recorded.add(result);
+              return const PracticeProgress.empty().record(
+                result.sessionId,
+                day,
+              );
+            },
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Chọn độ khó'), findsNothing);
+      final cell = find.byKey(ValueKey('sudoku-cell-$blank'));
+      await tester.tap(cell);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Gợi ý'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Hàng 1, cột ${blank + 1} còn'), findsWidgets);
+
+      await tester.ensureVisible(find.text('Phóng to'));
+      await tester.tap(find.text('Phóng to'));
+      await tester.pumpAndSettle();
+      final enlarged = find.byKey(ValueKey('enlarged-cell-$blank'));
+      expect(tester.getSize(enlarged).shortestSide, greaterThanOrEqualTo(48));
+      await tester.tap(find.byTooltip('Đóng'));
+      await tester.pumpAndSettle();
+
+      final digit = find.byKey(ValueKey('sudoku-digit-${solvedSudoku[blank]}'));
+      await tester.ensureVisible(digit);
+      await tester.tap(digit);
+      await tester.pumpAndSettle();
+      expect(recorded, hasLength(1));
+      expect(find.text('Hoàn thành Sudoku!'), findsOneWidget);
+      expect(find.text('Suy luận logic'), findsOneWidget);
+      expect(find.text('1 / 5 ván'), findsOneWidget);
+      expect(find.text('30 / 100 XP'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 }

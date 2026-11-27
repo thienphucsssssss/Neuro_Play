@@ -21,6 +21,22 @@ final class SudokuBoard {
   int notesAt(int index) => _notes[index];
   bool isGiven(int index) => _givens[index] != 0;
   bool isWrong(int index) => _wrong.contains(index);
+  List<int> candidatesAt(int index) {
+    if (isGiven(index) || (_values[index] != 0 && !isWrong(index))) {
+      return const [];
+    }
+    final used = {
+      for (final unit in _units)
+        if (unit.contains(index))
+          for (final peer in unit)
+            if (peer != index && !isWrong(peer)) _values[peer],
+    };
+    return [
+      for (var digit = 1; digit <= 9; digit++)
+        if (!used.contains(digit)) digit,
+    ];
+  }
+
   List<int> snapshot() => List.unmodifiable(_values);
   Set<int> get conflicts => _conflicts;
   bool get hasProgress => Iterable<int>.generate(81)

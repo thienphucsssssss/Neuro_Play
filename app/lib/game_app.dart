@@ -5,8 +5,9 @@ import 'package:provider/provider.dart';
 
 import 'auth/auth_controller.dart';
 import 'auth/auth_screens.dart';
+import 'core/neuro_theme.dart';
+import 'game_home.dart';
 import 'sudoku/sudoku_api.dart';
-import 'sudoku/sudoku_screen.dart';
 
 class GameApp extends StatelessWidget {
   const GameApp({required this.checkApi, required this.sudokuApi, super.key});
@@ -17,12 +18,10 @@ class GameApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) => MaterialApp(
     title: 'Neuro Play',
-    theme: ThemeData(
-      colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF175E52)),
-      inputDecorationTheme: const InputDecorationTheme(
-        border: OutlineInputBorder(),
-      ),
-    ),
+    locale: const Locale('vi'),
+    supportedLocales: const [Locale('vi')],
+    localizationsDelegates: GlobalMaterialLocalizations.delegates,
+    theme: NeuroTheme.light(),
     debugShowCheckedModeBanner: false,
     home: _AuthGate(checkApi: checkApi, sudokuApi: sudokuApi),
   );
@@ -40,6 +39,7 @@ class _AuthGate extends StatelessWidget {
     return switch (auth.phase) {
       AuthPhase.signedOut => const SignInScreen(),
       AuthPhase.signedIn => _SignedInNavigator(
+        key: ValueKey(auth.user!.id),
         checkApi: checkApi,
         sudokuApi: sudokuApi,
       ),
@@ -71,7 +71,11 @@ class _AuthGate extends StatelessWidget {
 }
 
 class _SignedInNavigator extends StatefulWidget {
-  const _SignedInNavigator({required this.checkApi, required this.sudokuApi});
+  const _SignedInNavigator({
+    required this.checkApi,
+    required this.sudokuApi,
+    super.key,
+  });
 
   final Future<void> Function() checkApi;
   final SudokuApi sudokuApi;
@@ -93,102 +97,13 @@ class _SignedInNavigatorState extends State<_SignedInNavigator> {
       key: _navigator,
       onGenerateRoute: (settings) => MaterialPageRoute<void>(
         settings: settings,
-        builder: (_) =>
-            _HomeScreen(checkApi: widget.checkApi, sudokuApi: widget.sudokuApi),
+        builder: (_) => GameHome(
+          sudokuApi: widget.sudokuApi,
+          health: HealthStatus(checkApi: widget.checkApi),
+        ),
       ),
     ),
   );
-}
-
-class _HomeScreen extends StatefulWidget {
-  const _HomeScreen({required this.checkApi, required this.sudokuApi});
-
-  final Future<void> Function() checkApi;
-  final SudokuApi sudokuApi;
-
-  @override
-  State<_HomeScreen> createState() => _HomeScreenState();
-}
-
-class _HomeScreenState extends State<_HomeScreen> {
-  late final AppLifecycleListener _lifecycle;
-
-  @override
-  void initState() {
-    super.initState();
-    _lifecycle = AppLifecycleListener(
-      onResume: () => unawaited(context.read<AuthController>().reloadProfile()),
-    );
-  }
-
-  @override
-  void dispose() {
-    _lifecycle.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final controller = context.watch<AuthController>();
-    final user = controller.user;
-    if (user == null) return const SizedBox.shrink();
-    return Scaffold(
-      appBar: AppBar(title: const Text('Neuro Play')),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 440),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    'Xin chào, ${user.displayName}',
-                    style: Theme.of(context).textTheme.headlineSmall,
-                  ),
-                  Text('@${user.username}'),
-                  const SizedBox(height: 24),
-                  FilledButton.icon(
-                    onPressed: controller.busy
-                        ? null
-                        : () => Navigator.of(context).push(
-                            MaterialPageRoute<void>(
-                              builder: (_) => SudokuScreen(
-                                api: widget.sudokuApi,
-                                authorize: controller.requestWithSession,
-                              ),
-                            ),
-                          ),
-                    icon: const Icon(Icons.grid_on),
-                    label: const Text('Sudoku'),
-                  ),
-                  const SizedBox(height: 24),
-                  HealthStatus(checkApi: widget.checkApi),
-                  if (controller.message case final message?) ...[
-                    const SizedBox(height: 16),
-                    Semantics(liveRegion: true, child: Text(message)),
-                  ],
-                  if (controller.profileRetry)
-                    TextButton(
-                      onPressed: controller.busy
-                          ? null
-                          : controller.reloadProfile,
-                      child: const Text('Tải lại hồ sơ'),
-                    ),
-                  const SizedBox(height: 24),
-                  OutlinedButton(
-                    onPressed: controller.busy ? null : controller.logout,
-                    child: const Text('Đăng xuất'),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 class HealthStatus extends StatefulWidget {

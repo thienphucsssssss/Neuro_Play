@@ -1,0 +1,943 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Neuro Play</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;500;600;700&amp;display=swap">
+  <style>
+    :root {
+      --surface: #F3F6FC;
+      --card: #FFFFFF;
+      --inset: #E9EFF9;
+      --overlay: #E3EAF8;
+      --text: #15213A;
+      --muted: #4B5972;
+      --rule: #CFD9EB;
+      --outline: #657795;
+      --primary: #2347BA;
+      --pressed: #19358F;
+      --on-primary: #FFFFFF;
+      --primary-container: #E2E9FF;
+      --on-primary-container: #172F7D;
+      --board: #FFFFFF;
+      --grid: #70819E;
+      --group: #405473;
+      --related: #EEF3FB;
+      --selected: #DCE7FF;
+      --error: #9D3843;
+      --error-fill: #F9E6E6;
+      --success: #266447;
+      --success-fill: #DDEFE5;
+      --sudoku: #356872;
+      --sudoku-tint: #D9EDEF;
+      --cube: #65518A;
+      --cube-tint: #EDE6F7;
+      --slide: #7C5728;
+      --slide-tint: #F5EADA;
+      --caro: #834A5B;
+      --caro-tint: #F5E5EB;
+      --font: "Source Sans 3", "Segoe UI", sans-serif;
+      --xs: 4px; --sm: 8px; --md: 12px; --lg: 16px; --xl: 24px; --xxl: 32px; --section: 48px;
+      --radius-control: 8px; --radius-card: 12px; --radius-sheet: 16px;
+      --touch: 48px; --outer: 960px;
+      --select: 100ms; --correct: 140ms; --wrong: 160ms; --result: 240ms;
+      color-scheme: light;
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+    .screen h1[tabindex="-1"]:focus { outline: none; }
+    body { margin: 0; background: var(--surface); color: var(--text); font: 400 1rem/1.5 var(--font); }
+    h1, h2, h3, p, ol, ul, dl, dd, figure { margin: 0; }
+    h1 { font-size: 1.875rem; line-height: 1.2667; font-weight: 700; }
+    h2 { font-size: 1.5rem; line-height: 1.3333; font-weight: 700; }
+    h3 { font-size: 1.125rem; line-height: 1.3333; font-weight: 600; }
+    button, a { -webkit-tap-highlight-color: transparent; }
+    button { color: inherit; font: inherit; cursor: pointer; }
+    button[aria-disabled="true"], button:disabled { cursor: default; }
+    [hidden] { display: none !important; }
+    .shell { width: min(calc(100% - 32px), var(--outer)); margin-inline: auto; }
+    .muted { color: var(--muted); }
+    .tabular, .metric, .cell, .key { font-variant-numeric: tabular-nums lining-nums; }
+    .mini { font-size: .875rem; line-height: 1.4286; }
+    .section-label { display: block; font-size: .875rem; font-weight: 600; line-height: 1.4286; }
+    .screen { padding-block: var(--xxl) var(--section); }
+    .button {
+      display: inline-flex; align-items: center; justify-content: center; gap: var(--sm);
+      min-width: var(--touch); min-height: var(--touch); padding: var(--sm) var(--lg);
+      border: 1px solid transparent; border-radius: var(--radius-control);
+      background: var(--primary); color: var(--on-primary);
+      font-size: .875rem; font-weight: 600; line-height: 1.4286;
+      transition: background var(--select) ease-out;
+    }
+    .button:active { background: var(--pressed); }
+    .button.secondary { background: var(--card); color: var(--text); border-color: var(--outline); }
+    .button.secondary:active { background: var(--inset); }
+    .button.secondary[aria-pressed="true"] { background: var(--primary-container); color: var(--on-primary-container); border-color: var(--primary); }
+    .button.icon { padding-inline: var(--sm); font-size: 1.375rem; }
+    .button:disabled { background: var(--inset); color: var(--muted); }
+    .button.compact { padding-inline: var(--md); }
+    .chev { font-size: 1.375rem; line-height: 1; }
+    .site-header { border-bottom: 1px solid var(--rule); background: var(--card); }
+    .topbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--sm) var(--xl); padding-block: var(--md); }
+    .brand {
+      display: inline-flex; gap: var(--sm); align-items: center; min-height: var(--touch); padding: 0;
+      border: 0; background: none; text-align: start; font-size: 1.5rem; font-weight: 700; line-height: 1.3333;
+    }
+    .brand-mark { display: grid; grid-template-columns: repeat(2, 12px); gap: 2px; padding: 3px; }
+    .brand-mark i { width: 12px; height: 12px; border-radius: 3px; background: var(--primary); }
+    .brand-mark i:nth-child(2) { background: var(--primary-container); border: 2px solid var(--primary); transform: translate(2px,-2px); }
+    .brand-mark i:nth-child(3) { background: var(--primary-container); }
+    .view-nav { display: flex; align-items: stretch; gap: var(--xs); }
+    .view-nav button {
+      min-width: var(--touch); min-height: var(--touch); padding: var(--sm) var(--md);
+      border: 0; border-bottom: 2px solid transparent; background: transparent;
+      font-size: .875rem; font-weight: 600; line-height: 1.4286;
+    }
+    .view-nav button[aria-current="page"] { border-color: var(--primary); color: var(--on-primary-container); }
+    .view-switch {
+      display: none; min-height: var(--touch); min-width: var(--touch); max-width: 46%;
+      padding-inline: var(--sm); border: 1px solid var(--outline); border-radius: var(--radius-control);
+      background: var(--card); color: var(--text); font: 600 .875rem/1.4286 var(--font);
+    }
+    .home-lead { display: grid; grid-template-columns: minmax(0, 1.75fr) minmax(0, 1fr); gap: var(--xl); align-items: stretch; }
+    .daily {
+      display: flex; align-items: center; position: relative; isolation: isolate; overflow: hidden;
+      min-height: 278px; padding: var(--xxl); border-radius: var(--radius-sheet);
+      background: var(--primary); color: var(--on-primary);
+    }
+    .daily-copy { position: relative; z-index: 1; max-width: 53%; }
+    .daily h1 { margin-top: var(--sm); font-size: 2.25rem; line-height: 1.2222; }
+    .daily-skill { margin-top: var(--xs); font-size: 1rem; line-height: 1.5; }
+    .daily .button { margin-top: var(--xl); background: var(--card); color: var(--on-primary-container); }
+    .daily .button:active { background: var(--primary-container); }
+    .daily .button:focus-visible { outline-color: var(--on-primary); }
+    .daily-art {
+      position: absolute; inset: auto clamp(-24px,1.2vw,16px) 8px auto;
+      width: min(49%, 260px); aspect-ratio: 1; pointer-events: none;
+    }
+    .art-grid {
+      display: grid; position: absolute; inset: 12%; transform: rotate(-13deg);
+      grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr);
+      gap: 4px; padding: 4px; border: 1px solid var(--primary-container); border-radius: 12px;
+    }
+    .art-grid i {
+      display: grid; place-items: center; min-width: 0;
+      border: 1px solid var(--primary-container); border-radius: 4px;
+      color: var(--on-primary); font-size: clamp(1rem,2vw,1.55rem); font-style: normal; font-weight: 600; line-height: 1;
+    }
+    .art-grid i:nth-child(1), .art-grid i:nth-child(9) { color: var(--on-primary-container); background: var(--primary-container); }
+    .art-grid i:nth-child(5) { background: var(--pressed); border-style: dashed; }
+    .art-grid i:nth-child(7) { background: var(--pressed); }
+    .art-tile {
+      display: grid; place-items: center; position: absolute; z-index: 1; inset: 9% 12% auto auto;
+      width: 37%; aspect-ratio: 1; transform: rotate(13deg);
+      border: 1px solid var(--sudoku); border-bottom: 5px solid var(--sudoku);
+      border-radius: 8px; background: var(--sudoku-tint); color: var(--sudoku);
+      font-size: clamp(1.4rem,4vw,3rem); font-weight: 700; line-height: 1;
+    }
+    .habit {
+      display: grid; align-content: center; gap: var(--lg); padding: var(--lg) 0 var(--lg) var(--xl);
+      border-inline-start: 1px solid var(--rule);
+    }
+    .habit h2 { font-size: 1.5rem; }
+    .habit h2 span { color: var(--primary); }
+    .week { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(7,minmax(0,1fr)); gap: var(--xs); }
+    .week li { display: grid; justify-items: center; gap: var(--xs); color: var(--muted); font-size: .75rem; line-height: 1.3333; }
+    .week .day-mark {
+      display: grid; place-items: center; width: min(100%,28px); aspect-ratio: 1;
+      border: 1px solid var(--rule); border-radius: 6px; background: var(--surface);
+      font-weight: 700; color: var(--on-primary-container);
+    }
+    .week .checked .day-mark { background: var(--primary-container); border-color: var(--primary); }
+    .week .today .day-mark { border: 2px solid var(--primary); }
+    .meter-label { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: var(--xs) var(--sm); }
+    .meter-label strong { font-weight: 600; color: var(--on-primary-container); }
+    progress { display: block; width: 100%; height: 8px; margin-top: var(--sm); border: 0; border-radius: 4px; overflow: hidden; accent-color: var(--primary); }
+    progress::-webkit-progress-bar { background: var(--inset); }
+    progress::-webkit-progress-value { background: var(--primary); }
+    progress::-moz-progress-bar { background: var(--primary); }
+    .skills { margin-top: var(--section); scroll-margin: var(--xl); }
+    .skills > h2 { margin-bottom: var(--lg); }
+    .skill-groups { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: var(--xl); }
+    .skill { min-width: 0; border-top: 2px solid var(--outline); padding-block: var(--md) 0; }
+    .skill > h3 { display: flex; align-items: baseline; min-height: 48px; }
+    .game-row {
+      display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; align-items: center; gap: var(--md);
+      width: 100%; min-width: 0; min-height: 64px; padding: var(--sm) 0; border: 0;
+      border-bottom: 1px solid var(--rule); background: none; text-align: start;
+    }
+    button.game-row:hover { background: var(--inset); }
+    .game-row strong { display: block; font-size: 1rem; font-weight: 600; }
+    .game-row small { color: var(--muted); font-size: .875rem; }
+    .game-icon { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 8px; font-weight: 700; }
+    .game-icon.sudoku { background: var(--sudoku-tint); color: var(--sudoku); }
+    .game-icon.cube { background: var(--cube-tint); color: var(--cube); }
+    .game-icon.sliding { background: var(--slide-tint); color: var(--slide); }
+    .game-icon.caro { background: var(--caro-tint); color: var(--caro); }
+    .micro-grid { display: grid; width: 27px; aspect-ratio: 1; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 2px; }
+    .micro-grid b { display: grid; place-items: center; border: 1px solid currentColor; border-radius: 2px; font-size: .625rem; line-height: 1; }
+    .sudoku .micro-grid b:last-child { background: var(--sudoku); color: var(--sudoku-tint); }
+    .sliding .micro-grid b:last-child { border-style: dashed; }
+    .sliding .micro-grid b:first-child { background: var(--slide); color: var(--slide-tint); }
+    .caro .micro-grid b { border: 0; font-size: 1.125rem; }
+    .micro-cube { position: relative; display: block; width: 29px; aspect-ratio: 1; }
+    .micro-cube i { position: absolute; inset: 0; background: var(--cube); }
+    .micro-cube i:nth-child(1) { clip-path: polygon(50% 2%,94% 25%,50% 48%,6% 25%); opacity: .7; }
+    .micro-cube i:nth-child(2) { clip-path: polygon(5% 32%,46% 54%,46% 98%,5% 76%); opacity: .85; }
+    .micro-cube i:nth-child(3) { clip-path: polygon(53% 54%,95% 32%,95% 76%,53% 98%); }
+    .app-nav {
+      display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); width: min(100%, 432px);
+      margin: var(--xxl) auto 0; padding: var(--xs); border: 1px solid var(--rule);
+      border-radius: var(--radius-card); background: var(--card);
+    }
+    .app-nav a {
+      display: grid; place-content: center; justify-items: center; gap: 2px;
+      min-width: var(--touch); min-height: 56px; border-radius: var(--radius-control);
+      color: var(--muted); text-decoration: none; font-size: .875rem; line-height: 1.25; font-weight: 600;
+    }
+    .app-nav a[aria-current="location"] { background: var(--primary-container); color: var(--on-primary-container); }
+    .nav-mark { font-size: 1.25rem; line-height: 1; }
+    .play-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--md) var(--xl); margin-bottom: var(--xl); }
+    .play-title { display: flex; align-items: center; gap: var(--md); }
+    .play-title .button { flex: 0 0 var(--touch); }
+    .play-stats, .round-stats { display: flex; flex-wrap: wrap; gap: var(--sm) var(--xl); }
+    .play-stats dt, .round-stats dt { color: var(--muted); font-size: .75rem; line-height: 1.3333; font-weight: 600; }
+    .metric { font-size: 1.375rem; font-weight: 600; line-height: 1.2727; }
+    .play-layout { display: grid; align-items: start; grid-template-columns: minmax(0,456px) minmax(250px,336px); gap: var(--xxl); }
+    .board {
+      display: grid; position: relative; width: 100%; max-width: 456px; aspect-ratio: 1;
+      grid-template-rows: repeat(9,minmax(0,1fr)); border: 2px solid var(--group); background: var(--board);
+    }
+    .board-row { display: grid; grid-template-columns: repeat(9,minmax(0,1fr)); min-height: 0; }
+    .square { min-width: 0; min-height: 0; border-right: 1px solid var(--grid); border-bottom: 1px solid var(--grid); }
+    .square:nth-child(3n) { border-right: 2px solid var(--group); }
+    .square:last-child { border-right: 0; }
+    .board-row:nth-child(3n) .square { border-bottom: 2px solid var(--group); }
+    .board-row:last-child .square { border-bottom: 0; }
+    .cell {
+      display: grid; place-items: center; position: relative; width: 100%; height: 100%; min-width: 0;
+      padding: 0; border: 0; border-radius: 0; background: var(--board);
+      font-size: 1.25rem; line-height: 1.2; font-weight: 500; transition: background var(--select) ease-out;
+    }
+    .cell:focus-visible { z-index: 2; outline: 2px solid var(--primary); outline-offset: -7px; }
+    .cell.related { background: var(--related); }
+    .cell.selected { background: var(--selected); }
+    .cell.selected::after, .cell.error::after, .cell.hint::after, .cell.done::after {
+      position: absolute; content: ""; inset: 1px; border: 2px solid var(--primary); pointer-events: none;
+    }
+    .edge-cue { display: none; position: absolute; width: 5px; height: 2px; background: var(--primary); }
+    .tick-left .edge-cue { display: block; left: 0; }
+    .tick-right .edge-cue { display: block; right: 0; }
+    .tick-top .edge-cue { display: block; top: 0; width: 2px; height: 5px; }
+    .tick-bottom .edge-cue { display: block; bottom: 0; width: 2px; height: 5px; }
+    .cell.given { font-weight: 700; }
+    .cell.error { background: var(--error-fill); color: var(--error); font-weight: 600; transition-duration: var(--wrong); }
+    .cell.error::after { border-color: var(--error); }
+    .cell.hint { background: var(--primary-container); color: var(--on-primary-container); font-weight: 600; }
+    .cell.hint::after { border-color: var(--on-primary-container); border-style: dashed; }
+    .cell.done { background: var(--success-fill); color: var(--success); font-weight: 600; transition-duration: var(--correct); }
+    .cell.done::after { border-color: var(--success); }
+    .corner {
+      position: absolute; z-index: 1; inset: 4px 4px auto auto;
+      font-size: .6875rem; line-height: 1; font-weight: 700;
+    }
+    .hint-index {
+      position: absolute; z-index: 1; inset: auto auto 4px 4px;
+      color: var(--on-primary-container); font-size: .6875rem; line-height: 1; font-weight: 700;
+    }
+    .selected::before {
+      position: absolute; z-index: 1; content: ""; inset: 5px auto auto 5px;
+      width: 5px; height: 5px; border-inline-start: 2px solid var(--primary); border-block-start: 2px solid var(--primary);
+    }
+    .candidates {
+      position: absolute; inset: 3px; display: grid; grid-template-columns: repeat(3,1fr); grid-template-rows: repeat(3,1fr);
+      place-items: center; color: var(--muted); font-size: .5625rem; line-height: 1.1111; pointer-events: none;
+    }
+    .controls { display: grid; gap: var(--md); min-width: 0; }
+    .selection-copy { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: var(--xs) var(--sm); }
+    .selection-copy strong { font-size: 1rem; font-weight: 600; }
+    .status { min-height: 20px; color: var(--muted); }
+    .status.has-error { color: var(--error); }
+    .keys { display: grid; grid-template-columns: repeat(5,minmax(48px,1fr)); gap: var(--sm); }
+    .key {
+      min-width: var(--touch); min-height: var(--touch); border: 1px solid var(--outline); border-radius: var(--radius-control);
+      background: var(--card); font-size: 1.125rem; font-weight: 600; line-height: 1.3333;
+    }
+    .key:active { background: var(--primary-container); color: var(--on-primary-container); }
+    .tools { display: flex; flex-wrap: wrap; align-items: stretch; gap: var(--sm); }
+    .hint-copy {
+      display: grid; grid-template-columns: 24px minmax(0,1fr); align-items: start; gap: var(--sm);
+      padding: var(--md); border: 1px dashed var(--on-primary-container); border-radius: var(--radius-control);
+      background: var(--primary-container); color: var(--on-primary-container);
+    }
+    .hint-copy strong { display: grid; width: 24px; height: 24px; place-items: center; border: 1px dashed currentColor; border-radius: 4px; }
+    .dialog {
+      width: min(calc(100% - 24px), 570px); max-height: calc(100% - 24px); padding: var(--lg);
+      border: 1px solid var(--outline); border-radius: var(--radius-sheet); color: var(--text); background: var(--overlay);
+      overflow: auto;
+    }
+    .dialog::backdrop { background: #15213A66; }
+    .dialog-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--sm); margin-bottom: var(--md); }
+    .board-scroll { overflow: auto; padding: 2px; }
+    .board.enlarged { width: 454px; min-width: 454px; max-width: none; }
+    .dialog .candidates { font-size: .625rem; line-height: 1.2; }
+    .dialog .keys { margin-top: var(--md); }
+    .directions { display: flex; flex-wrap: wrap; gap: var(--xs); margin-block: var(--md); }
+    .navigate-board { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sm) var(--md); }
+    .result-layout { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: var(--xl); align-items: start; }
+    .result-hero {
+      position: relative; isolation: isolate; min-height: 300px; padding: var(--xxl);
+      border: 1px solid var(--outline); border-radius: var(--radius-sheet); background: var(--success-fill);
+      overflow: hidden;
+    }
+    .result-hero h1 { font-size: 2.25rem; line-height: 1.2222; max-width: 65%; margin: var(--md) 0 var(--xs); }
+    .result-mark { color: var(--success); }
+    .score { color: var(--text); font-size: 2rem; line-height: 1.25; font-weight: 700; }
+    .round-stats { margin-top: var(--xl); }
+    .stamp {
+      position: absolute; z-index: -1; inset: var(--xl) var(--xxl) auto auto; width: clamp(80px, 14vw,132px); aspect-ratio: 1;
+      color: var(--success); animation: settle var(--result) ease-out both;
+    }
+    .stamp i {
+      display: grid; place-items: center; position: absolute; inset: 17% 9% 8% 11%;
+      border: 2px solid currentColor; border-radius: 12px; font-style: normal;
+    }
+    .stamp i:first-child { transform: rotate(-14deg) translate(-8px,8px); background: var(--success-fill); }
+    .stamp i:last-child { transform: rotate(9deg); background: var(--card); font-size: clamp(2.25rem,6vw,4.5rem); font-weight: 700; line-height: 1; }
+    @keyframes settle { from { opacity: 0; transform: translateY(-7px); } to { opacity: 1; transform: translateY(0); } }
+    .result-progress { padding-block: var(--sm); border-top: 2px solid var(--outline); }
+    .progress-row { padding: var(--lg) 0; border-bottom: 1px solid var(--rule); }
+    .progress-row:last-child { border: 0; padding-bottom: 0; }
+    .progress-row p { margin-top: var(--xs); }
+    .progress-row .delta { color: var(--success); font-weight: 700; }
+    .progress-row.skill-progress progress::-webkit-progress-value { background: var(--sudoku); }
+    .progress-row.skill-progress progress::-moz-progress-bar { background: var(--sudoku); }
+    .result-actions { display: flex; flex-wrap: wrap; gap: var(--sm); margin-top: var(--xl); }
+    @media (min-width: 600px) { .shell { width: min(calc(100% - 48px), var(--outer)); } }
+    @media (max-width: 839px) {
+      .play-layout { grid-template-columns: minmax(0,456px); justify-content: center; gap: var(--lg); }
+      .game-row { grid-template-columns: 48px minmax(0,1fr) auto; }
+    }
+    @media (max-width: 675px) {
+      .home-lead, .skill-groups, .result-layout { grid-template-columns: minmax(0,1fr); }
+      .home-lead, .result-layout { gap: var(--lg); }
+      .skill-groups { gap: var(--lg); }
+      .skill > h3 { min-height: 0; margin-bottom: var(--xs); }
+      .skills { margin-top: var(--xxl); }
+      .screen { padding-block: var(--lg) var(--xxl); }
+      .daily { min-height: 226px; padding: var(--xl); }
+      .habit { padding: var(--lg) 0; border-inline-start: 0; border-block: 1px solid var(--rule); }
+      .result-progress { padding-block: var(--md) 0; }
+      .result-hero { min-height: 0; padding: var(--xl); }
+      .result-hero h1 { max-width: calc(100% - 64px); }
+      .stamp { right: 16px; }
+    }
+    @media (max-width: 479px) {
+      .topbar { padding-block: var(--sm); gap: var(--sm); }
+      .view-nav { display: none; }
+      .view-switch { display: block; }
+      .daily-copy { max-width: 62%; }
+      .daily h1 { font-size: 1.875rem; line-height: 1.2667; }
+      .daily .button { margin-top: var(--lg); }
+      .daily-art { inset-inline-end: -12px; width: 54%; }
+      .play-head { margin-bottom: var(--md); }
+      .play-layout { gap: var(--md); }
+      .cell { font-size: 1.125rem; line-height: 1.2222; }
+      .play-stats { gap: var(--lg); }
+    }
+    @media (max-width: 350px) {
+      .daily { padding: var(--lg); }
+      .keys { grid-template-columns: repeat(4,minmax(48px,1fr)); }
+      .daily-art { bottom: 6px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; animation: none !important; transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="topbar shell">
+      <button class="brand" type="button" data-screen="home" aria-label="Neuro Play · Trang chủ">
+        <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+        <span>Neuro Play</span>
+      </button>
+      <nav class="view-nav" aria-label="Chọn màn hình xem trước">
+        <button type="button" data-screen="home" aria-current="page">Trang chủ</button>
+        <button type="button" data-screen="play">Sudoku</button>
+        <button type="button" data-screen="result">Kết quả</button>
+      </nav>
+      <select class="view-switch" aria-label="Màn hình xem trước">
+        <option value="home">Trang chủ</option>
+        <option value="play">Sudoku</option>
+        <option value="result">Kết quả</option>
+      </select>
+    </div>
+  </header>
+
+  <main class="shell">
+    <section class="screen" id="home" aria-labelledby="home-title">
+      <div class="home-lead" id="today">
+        <section class="daily" aria-labelledby="home-title">
+          <div class="daily-copy">
+            <p class="section-label" data-daily-state>Thử thách hôm nay</p>
+            <h1 id="home-title" tabindex="-1">Sudoku</h1>
+            <p class="daily-skill">Mức vừa · Suy luận logic</p>
+            <button class="button" type="button" data-start><span data-daily-action>Chơi ngay</span> <span class="chev" aria-hidden="true">→</span></button>
+          </div>
+          <div class="daily-art" aria-hidden="true">
+            <div class="art-grid"><i>2</i><i></i><i>9</i><i></i><i></i><i>4</i><i></i><i>6</i><i>3</i></div>
+            <span class="art-tile">7</span>
+          </div>
+        </section>
+
+        <section class="habit" id="practice" aria-labelledby="habit-title">
+          <h2 id="habit-title"><span data-streak>2</span> ngày liên tiếp</h2>
+          <ol class="week" aria-label="Các ngày đã luyện tập trong tuần" data-week="home"></ol>
+          <div>
+            <div class="meter-label mini">
+              <span>Cấp 3</span>
+              <strong class="tabular"><span data-home-xp>60</span> / 100 XP</strong>
+            </div>
+            <progress value="60" max="100" aria-label="Kinh nghiệm cấp 3" data-home-bar></progress>
+          </div>
+        </section>
+      </div>
+
+      <section class="skills" id="skills" aria-labelledby="skills-title">
+        <h2 id="skills-title">Chơi theo kỹ năng</h2>
+        <div class="skill-groups">
+          <section class="skill" aria-labelledby="logic-title">
+            <h3 id="logic-title">Suy luận logic</h3>
+            <button class="game-row" type="button" data-start>
+              <span class="game-icon sudoku" aria-hidden="true"><span class="micro-grid"><b>2</b><b></b><b></b><b>7</b></span></span>
+              <span><strong>Sudoku</strong><small>Tìm số bằng cách loại trừ</small></span>
+              <span class="chev" aria-hidden="true">›</span>
+            </button>
+            <div class="game-row">
+              <span class="game-icon cube" aria-hidden="true"><span class="micro-cube"><i></i><i></i><i></i></span></span>
+              <span><strong>Khối lập phương 3D</strong><small>Tìm quy luật xoay</small></span>
+            </div>
+          </section>
+          <section class="skill" aria-labelledby="space-title">
+            <h3 id="space-title">Không gian và lập kế hoạch</h3>
+            <div class="game-row">
+              <span class="game-icon sliding" aria-hidden="true"><span class="micro-grid"><b>→</b><b>2</b><b>3</b><b></b></span></span>
+              <span><strong>Xếp hình</strong><small>Sắp thứ tự các bước trượt</small></span>
+            </div>
+          </section>
+          <section class="skill" aria-labelledby="strategy-title">
+            <h3 id="strategy-title">Chiến thuật và dự đoán</h3>
+            <div class="game-row">
+              <span class="game-icon caro" aria-hidden="true"><span class="micro-grid"><b>×</b><b>○</b><b></b><b>×</b></span></span>
+              <span><strong>Cờ Caro</strong><small>Đọc thế cờ và đoán nước đáp</small></span>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <nav class="app-nav" aria-label="Điều hướng Trang chủ">
+        <a href="#today" aria-current="location"><span class="nav-mark" aria-hidden="true">⌂</span>Hôm nay</a>
+        <a href="#skills"><span class="nav-mark" aria-hidden="true">⊞</span>Trò chơi</a>
+        <a href="#practice"><span class="nav-mark" aria-hidden="true">▥</span>Tiến độ</a>
+      </nav>
+    </section>
+
+    <section class="screen" id="play" aria-labelledby="play-title" hidden>
+      <header class="play-head">
+        <div class="play-title">
+          <button class="button secondary icon" type="button" data-screen="home" aria-label="Về trang chủ">←</button>
+          <div>
+            <h1 id="play-title" tabindex="-1">Sudoku</h1>
+            <p class="mini muted">Mức vừa · Suy luận logic</p>
+          </div>
+        </div>
+        <dl class="play-stats">
+          <div><dt>Thời gian</dt><dd class="metric">04:28</dd></div>
+          <div><dt>Số lỗi</dt><dd class="metric" data-errors>1</dd></div>
+          <div><dt>Ô còn trống</dt><dd class="metric" data-empty>3</dd></div>
+        </dl>
+      </header>
+
+      <div class="play-layout">
+        <div class="board" id="main-board" role="grid" aria-label="Bàn Sudoku" aria-rowcount="9" aria-colcount="9"></div>
+
+        <section class="controls" aria-label="Điều khiển Sudoku">
+          <p class="selection-copy"><span class="mini muted">Ô đang chọn</span><strong data-coordinate>Hàng 4, cột 4</strong></p>
+          <div class="keys" role="group" aria-label="Bàn phím Sudoku">
+              <button class="key" type="button" data-digit="1">1</button>
+              <button class="key" type="button" data-digit="2">2</button>
+              <button class="key" type="button" data-digit="3">3</button>
+              <button class="key" type="button" data-digit="4">4</button>
+              <button class="key" type="button" data-digit="5">5</button>
+              <button class="key" type="button" data-digit="6">6</button>
+              <button class="key" type="button" data-digit="7">7</button>
+              <button class="key" type="button" data-digit="8">8</button>
+              <button class="key" type="button" data-digit="9">9</button>
+              <button class="key" type="button" data-digit="0" aria-label="Xóa số"><span aria-hidden="true">⌫</span></button>
+            </div>
+          <div class="tools">
+            <button class="button secondary compact" type="button" data-note aria-pressed="false">Ghi chú</button>
+            <button class="button secondary compact" type="button" data-hint>Gợi ý</button>
+            <button class="button secondary compact" type="button" data-zoom>Phóng to</button>
+          </div>
+          <p class="status mini" role="status" id="play-status">Chọn một số để điền vào ô trống.</p>
+          <div class="hint-copy mini" data-hint-copy hidden>
+            <strong aria-hidden="true">1</strong><p></p>
+          </div>
+          <button class="button" type="button" data-submit>Nộp bài</button>
+        </section>
+      </div>
+
+      <dialog class="dialog" id="board-dialog" aria-labelledby="dialog-title">
+        <div class="dialog-header">
+          <h2 id="dialog-title">Bàn Sudoku phóng to</h2>
+          <button class="button secondary compact" type="button" data-close>Đóng</button>
+        </div>
+        <div class="board-scroll">
+          <div class="board enlarged" id="zoom-board" role="grid" aria-label="Bàn Sudoku phóng to" aria-rowcount="9" aria-colcount="9"></div>
+        </div>
+        <div class="navigate-board">
+          <strong data-coordinate>Hàng 4, cột 4</strong>
+          <div class="directions" role="group" aria-label="Di chuyển ô đang chọn">
+            <button class="button secondary icon" type="button" data-direction="-1" aria-label="Sang trái">←</button>
+            <button class="button secondary icon" type="button" data-direction="-9" aria-label="Lên một hàng">↑</button>
+            <button class="button secondary icon" type="button" data-direction="9" aria-label="Xuống một hàng">↓</button>
+            <button class="button secondary icon" type="button" data-direction="1" aria-label="Sang phải">→</button>
+          </div>
+        </div>
+        <div class="keys" role="group" aria-label="Bàn phím Sudoku">
+              <button class="key" type="button" data-digit="1">1</button>
+              <button class="key" type="button" data-digit="2">2</button>
+              <button class="key" type="button" data-digit="3">3</button>
+              <button class="key" type="button" data-digit="4">4</button>
+              <button class="key" type="button" data-digit="5">5</button>
+              <button class="key" type="button" data-digit="6">6</button>
+              <button class="key" type="button" data-digit="7">7</button>
+              <button class="key" type="button" data-digit="8">8</button>
+              <button class="key" type="button" data-digit="9">9</button>
+              <button class="key" type="button" data-digit="0" aria-label="Xóa số"><span aria-hidden="true">⌫</span></button>
+            </div>
+        <p class="status mini" role="status" id="zoom-status"></p>
+      </dialog>
+    </section>
+
+    <section class="screen" id="result" aria-labelledby="result-title" hidden>
+      <div class="result-layout">
+        <article class="result-hero" aria-labelledby="result-title">
+          <p class="section-label result-mark"><span aria-hidden="true">✓</span> Thử thách hôm nay</p>
+          <h1 id="result-title" tabindex="-1">Hoàn thành Sudoku!</h1>
+          <p class="mini muted">Mức vừa</p>
+          <figure class="stamp" aria-hidden="true"><i></i><i>✓</i></figure>
+          <dl class="round-stats">
+            <div><dt>Điểm ván</dt><dd class="score tabular" data-score>914</dd></div>
+            <div><dt>Thời gian</dt><dd class="metric">04:28</dd></div>
+            <div><dt>Số lỗi</dt><dd class="metric" data-result-errors>1</dd></div>
+          </dl>
+        </article>
+
+        <section class="result-progress" aria-labelledby="progress-title">
+          <h2 id="progress-title">Tiến độ luyện tập</h2>
+          <div class="progress-row skill-progress">
+            <div class="meter-label">
+              <h3>Suy luận logic</h3>
+              <strong class="tabular mini">3 / 5 ván</strong>
+            </div>
+            <progress value="3" max="5" aria-label="Suy luận logic tuần này, 3 trên 5 ván"></progress>
+            <p class="mini muted">Thêm một ván cho mục tiêu tuần này.</p>
+          </div>
+          <div class="progress-row">
+            <div class="meter-label">
+              <h3>Cấp 3 <span class="delta mini">+30 XP</span></h3>
+              <strong class="tabular mini">90 / 100 XP</strong>
+            </div>
+            <progress value="90" max="100" aria-label="Kinh nghiệm cấp 3, 90 trên 100 XP"></progress>
+          </div>
+          <div class="progress-row">
+            <h3>3 ngày liên tiếp</h3>
+            <ol class="week" aria-label="Chuỗi luyện tập sau khi hoàn thành" data-week="result"></ol>
+          </div>
+        </section>
+      </div>
+
+      <div class="result-actions">
+        <button class="button" type="button" data-screen="home">Về trang chủ <span class="chev" aria-hidden="true">→</span></button>
+        <button class="button secondary" type="button" data-replay>Chơi lại</button>
+      </div>
+    </section>
+  </main>
+  <script>
+    const solved = [
+      "534678912", "672195348", "198342567",
+      "859761423", "426853791", "713924856",
+      "961537284", "287419635", "345286179"
+    ].join("").split("").map(Number);
+    const given = new Set([
+      0, 1, 4, 9, 12, 13, 14, 19, 20, 25, 27, 31, 35, 36, 39, 41,
+      44, 45, 49, 53, 55, 60, 61, 66, 67, 68, 71, 76, 79, 80
+    ]);
+    const blanks = [30, 32, 40];
+    const elapsed = 268;
+    const boards = [...document.querySelectorAll(".board")];
+    const dialog = document.querySelector("#board-dialog");
+    const hintBox = document.querySelector("[data-hint-copy]");
+    const liveStatuses = [...document.querySelectorAll("[role=status]")];
+    const playStatus = document.querySelector("#play-status");
+    const reviewSwitch = document.querySelector(".view-switch");
+    const dateNames = ["Thứ hai", "Thứ ba", "Thứ tư", "Thứ năm", "Thứ sáu", "Thứ bảy", "Chủ nhật"];
+    const dateShort = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
+    const numberFormat = new Intl.NumberFormat("vi-VN");
+
+    let values;
+    let notes;
+    let errors;
+    let activeCell;
+    let indicatedCell;
+    let corrected;
+    let noteMode;
+    let completed;
+    let dailyComplete = false;
+
+    function coordinates(index) {
+      return [Math.floor(index / 9) + 1, index % 9 + 1];
+    }
+
+    function coordinateText(index) {
+      const [row, column] = coordinates(index);
+      return "Hàng " + row + ", cột " + column;
+    }
+
+    function report(message, isError = false) {
+      for (const region of liveStatuses) {
+        region.textContent = message;
+        region.classList.toggle("has-error", isError);
+      }
+    }
+
+    function resetRound() {
+      values = solved.map((value, index) => blanks.includes(index) ? 0 : value);
+      notes = new Map([[32, new Set([1, 4])]]);
+      errors = 1;
+      activeCell = blanks[0];
+      indicatedCell = null;
+      corrected = new Set();
+      noteMode = false;
+      completed = false;
+      report("Chọn một số để điền vào ô trống.");
+      refresh();
+    }
+
+    function refresh() {
+      const [activeRow, activeColumn] = coordinates(activeCell);
+
+      for (const board of boards) {
+        for (const cell of board.querySelectorAll(".cell")) {
+          const index = Number(cell.dataset.cell);
+          const [row, column] = coordinates(index);
+          const value = values[index];
+          const cellNotes = [...(notes.get(index) ?? [])].sort();
+          const isGiven = given.has(index);
+          const isSelected = index === activeCell;
+          const isRelated = !isSelected && (
+            row === activeRow || column === activeColumn ||
+            (Math.floor((row - 1) / 3) === Math.floor((activeRow - 1) / 3) &&
+              Math.floor((column - 1) / 3) === Math.floor((activeColumn - 1) / 3))
+          );
+          const isError = value !== 0 && value !== solved[index];
+          const isHint = index === indicatedCell;
+          const isDone = corrected.has(index);
+          const states = {
+            selected: isSelected, related: isRelated, given: isGiven,
+            entered: !!value && !isGiven, note: !value && cellNotes.length > 0,
+            error: isError, hint: isHint && !isError, done: isDone && !isError && !isHint,
+            "tick-left": row === activeRow && column === 1,
+            "tick-right": row === activeRow && column === 9,
+            "tick-top": column === activeColumn && row === 1,
+            "tick-bottom": column === activeColumn && row === 9
+          };
+          const label = [coordinateText(index)];
+          if (value) label.push((isGiven ? "Số cho sẵn " : "Số đã nhập ") + value);
+          else if (cellNotes.length) label.push("Ghi chú " + cellNotes.join(", "));
+          else label.push("Ô trống");
+          if (isSelected) label.push("Đang chọn");
+          if (isRelated) label.push("Ô liên quan");
+          if (isError) label.push("Sai");
+          if (isHint) label.push("Gợi ý 1");
+          if (isDone && !isError && !isHint) label.push("Đã điền đúng");
+
+          cell.className = "cell";
+          for (const [name, used] of Object.entries(states)) {
+            if (used) cell.classList.add(name);
+          }
+          cell.tabIndex = isSelected ? 0 : -1;
+          cell.parentElement.setAttribute("aria-selected", String(isSelected));
+          cell.setAttribute("aria-label", label.join(". "));
+          cell.querySelector(".cell-value").textContent = value || "";
+          cell.querySelector(".corner").textContent = isError ? "!" : isHint ? "1" : isDone ? "✓" : "";
+          cell.querySelector(".hint-index").textContent = isError && isHint ? "1" : "";
+
+          const candidates = cell.querySelector(".candidates");
+          candidates.replaceChildren();
+          if (!value) {
+            for (const digit of cellNotes) {
+              const note = document.createElement("span");
+              note.style.gridArea = Math.ceil(digit / 3) + " / " + ((digit - 1) % 3 + 1);
+              note.textContent = digit;
+              candidates.append(note);
+            }
+          }
+        }
+      }
+
+      document.querySelectorAll("[data-coordinate]").forEach(label => {
+        label.textContent = coordinateText(activeCell);
+      });
+      document.querySelector("[data-empty]").textContent = values.filter(value => value === 0).length;
+      document.querySelector("[data-errors]").textContent = errors;
+      document.querySelector("[data-note]").setAttribute("aria-pressed", String(noteMode));
+      hintBox.hidden = indicatedCell === null;
+      if (indicatedCell !== null) {
+        const [row, column] = coordinates(indicatedCell);
+        const digit = solved[indicatedCell];
+        const columnValues = values.filter((_, i) => i % 9 === column - 1);
+        const missingOnly = columnValues.every((value, i) => i === row - 1 || value === solved[i * 9 + column - 1]);
+        hintBox.querySelector("p").textContent = missingOnly
+          ? "Cột " + column + " còn thiếu số " + digit + ". Điền vào hàng " + row + "."
+          : "Thử số " + digit + " ở hàng " + row + ", cột " + column + ". Kiểm tra theo hàng, cột và khối.";
+      }
+    }
+
+    function makeBoard(board) {
+      for (let row = 0; row < 9; row += 1) {
+        const line = document.createElement("div");
+        line.className = "board-row";
+        line.setAttribute("role", "row");
+        for (let column = 0; column < 9; column += 1) {
+          const square = document.createElement("div");
+          square.className = "square";
+          square.setAttribute("role", "gridcell");
+          const cell = document.createElement("button");
+          cell.className = "cell";
+          cell.type = "button";
+          cell.tabIndex = -1;
+          cell.dataset.cell = row * 9 + column;
+          for (const name of ["cell-value", "corner", "hint-index", "candidates", "edge-cue"]) {
+            const element = document.createElement("span");
+            element.className = name;
+            element.setAttribute("aria-hidden", "true");
+            cell.append(element);
+          }
+          square.append(cell);
+          line.append(square);
+        }
+        board.append(line);
+      }
+
+      board.addEventListener("click", event => {
+        const target = event.target.closest(".cell");
+        if (target && Number(target.dataset.cell) !== activeCell) select(Number(target.dataset.cell));
+      });
+      board.addEventListener("focusin", event => {
+        const target = event.target.closest(".cell");
+        if (target && Number(target.dataset.cell) !== activeCell) select(Number(target.dataset.cell));
+      });
+      board.addEventListener("keydown", event => {
+        const movement = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -9, ArrowDown: 9 };
+        if (event.key in movement) {
+          event.preventDefault();
+          move(movement[event.key], board, true);
+        } else if (/^[1-9]$/.test(event.key)) {
+          event.preventDefault();
+          enter(Number(event.key));
+        } else if (["Backspace", "Delete"].includes(event.key)) {
+          event.preventDefault();
+          enter(0);
+        }
+      });
+    }
+
+    function select(index) {
+      activeCell = index;
+      if (indicatedCell !== index) indicatedCell = null;
+      refresh();
+      if (given.has(index)) report("Đây là số cho sẵn.");
+      else if (values[index] && values[index] !== solved[index]) report("Ô này chưa đúng. Bạn có thể thử lại.", true);
+      else report(coordinateText(index) + (values[index] ? ". Bạn có thể sửa số đã nhập." : ". Chọn một số để điền."));
+    }
+
+    function move(step, board, focusBoard) {
+      const target = activeCell + step;
+      if (target < 0 || target >= 81 || (Math.abs(step) === 1 && Math.floor(target / 9) !== Math.floor(activeCell / 9))) return;
+      select(target);
+      const cell = board.querySelector('[data-cell="' + target + '"]');
+      if (focusBoard) cell.focus({ preventScroll: true });
+      if (board.classList.contains("enlarged")) revealZoomCell();
+    }
+
+    function revealZoomCell() {
+      const scrollArea = document.querySelector(".board-scroll");
+      const cell = document.querySelector('#zoom-board [data-cell="' + activeCell + '"]');
+      const viewport = scrollArea.getBoundingClientRect();
+      const target = cell.getBoundingClientRect();
+      if (target.left < viewport.left + 2) scrollArea.scrollLeft -= viewport.left + 2 - target.left;
+      if (target.right > viewport.right - 2) scrollArea.scrollLeft += target.right - viewport.right + 2;
+    }
+
+    function enter(value) {
+      if (given.has(activeCell)) {
+        report("Đây là số cho sẵn. Chọn một ô khác.");
+        return;
+      }
+      if (noteMode && value) {
+        if (values[activeCell]) {
+          report("Hãy xóa số đã nhập trước khi thêm ghi chú.");
+          return;
+        }
+        const candidates = notes.get(activeCell) ?? new Set();
+        if (candidates.has(value)) candidates.delete(value);
+        else candidates.add(value);
+        notes.set(activeCell, candidates);
+        report(candidates.size ? "Đã cập nhật ghi chú." : "Đã xóa ghi chú.");
+      } else {
+        const previous = values[activeCell];
+        indicatedCell = null;
+        values[activeCell] = value;
+        notes.delete(activeCell);
+        corrected.delete(activeCell);
+        if (value === 0) {
+          report("Đã xóa nội dung ô.");
+        } else if (value === solved[activeCell]) {
+          corrected.add(activeCell);
+          report(values.every((digit, i) => digit === solved[i]) ? "Đã điền đúng cả bàn. Bây giờ bạn có thể nộp bài." : "Đã điền đúng.");
+        } else {
+          if (value !== previous) errors += 1;
+          report("Ô này chưa đúng. Bạn có thể thử lại.", true);
+        }
+      }
+      refresh();
+    }
+
+    function showHint() {
+      const firstOpen = values.findIndex((value, i) => value !== solved[i]);
+      if (firstOpen < 0) {
+        report("Bạn đã điền đúng cả bàn.");
+        return;
+      }
+      const selectedNeedsWork = !given.has(activeCell) && values[activeCell] !== solved[activeCell];
+      activeCell = selectedNeedsWork ? activeCell : firstOpen;
+      indicatedCell = activeCell;
+      refresh();
+      report("Gợi ý 1. " + hintBox.querySelector("p").textContent);
+    }
+
+    function showProgress() {
+      const homeXP = dailyComplete ? 90 : 60;
+      document.querySelector("[data-daily-state]").textContent = dailyComplete ? "Thử thách hôm nay · Đã xong" : "Thử thách hôm nay";
+      document.querySelector("[data-daily-action]").textContent = dailyComplete ? "Chơi lại" : "Chơi ngay";
+      document.querySelector("[data-streak]").textContent = dailyComplete ? "3" : "2";
+      document.querySelector("[data-home-xp]").textContent = homeXP;
+      document.querySelector("[data-home-bar]").value = homeXP;
+
+      for (const strip of document.querySelectorAll("[data-week]")) {
+        const doneToday = dailyComplete || strip.dataset.week === "result";
+        strip.replaceChildren();
+        for (const [index, name] of dateNames.entries()) {
+          const day = document.createElement("li");
+          const mark = document.createElement("span");
+          const label = document.createElement("span");
+          const isToday = index === 2;
+          const checked = index < 2 || (isToday && doneToday);
+          day.classList.toggle("checked", checked);
+          day.classList.toggle("today", isToday);
+          day.setAttribute("aria-label", name + (isToday ? ", hôm nay" : "") + (checked ? ", đã luyện tập" : ", chưa luyện tập"));
+          mark.className = "day-mark";
+          mark.textContent = checked ? "✓" : "";
+          mark.setAttribute("aria-hidden", "true");
+          label.textContent = dateShort[index];
+          label.setAttribute("aria-hidden", "true");
+          day.append(mark, label);
+          strip.append(day);
+        }
+      }
+    }
+
+    function openScreen(name, focus = true) {
+      for (const screen of document.querySelectorAll(".screen")) screen.hidden = screen.id !== name;
+      reviewSwitch.value = name;
+      for (const choice of document.querySelectorAll(".view-nav [data-screen]")) {
+        if (choice.dataset.screen === name) choice.setAttribute("aria-current", "page");
+        else choice.removeAttribute("aria-current");
+      }
+      if (focus) {
+        window.scrollTo(0, 0);
+        document.querySelector("#" + name + " h1").focus({ preventScroll: true });
+      }
+    }
+
+    function submit() {
+      if (!values.every((value, index) => value === solved[index])) {
+        const open = values.filter(value => !value).length;
+        report(open ? "Bạn còn " + open + " ô trống." : "Một số ô chưa đúng. Kiểm tra lại trước khi nộp.", true);
+        playStatus.scrollIntoView({ block: "nearest" });
+        return;
+      }
+      const score = Math.max(0, 1500 - 2 * elapsed - 50 * errors);
+      document.querySelector("[data-score]").textContent = numberFormat.format(score);
+      document.querySelector("[data-result-errors]").textContent = errors;
+      completed = true;
+      dailyComplete = true;
+      showProgress();
+      openScreen("result");
+    }
+
+    for (const board of boards) makeBoard(board);
+    resetRound();
+    showProgress();
+
+    for (const control of document.querySelectorAll("[data-screen]")) {
+      control.addEventListener("click", () => openScreen(control.dataset.screen));
+    }
+    reviewSwitch.addEventListener("change", () => openScreen(reviewSwitch.value));
+    for (const control of document.querySelectorAll("[data-start]")) {
+      control.addEventListener("click", () => {
+        if (completed) resetRound();
+        openScreen("play");
+      });
+    }
+    for (const key of document.querySelectorAll("[data-digit]")) {
+      key.addEventListener("click", () => enter(Number(key.dataset.digit)));
+    }
+    for (const direction of document.querySelectorAll("[data-direction]")) {
+      direction.addEventListener("click", () => move(Number(direction.dataset.direction), boards[1], false));
+    }
+    for (const anchor of document.querySelectorAll(".app-nav a")) {
+      anchor.addEventListener("click", () => {
+        document.querySelector(".app-nav [aria-current]").removeAttribute("aria-current");
+        anchor.setAttribute("aria-current", "location");
+      });
+    }
+
+    document.querySelector("[data-note]").addEventListener("click", () => {
+      noteMode = !noteMode;
+      refresh();
+      report(noteMode ? "Đang nhập ghi chú." : "Đang nhập số.");
+    });
+    document.querySelector("[data-hint]").addEventListener("click", showHint);
+    document.querySelector("[data-submit]").addEventListener("click", submit);
+    document.querySelector("[data-replay]").addEventListener("click", () => {
+      resetRound();
+      openScreen("play");
+    });
+    const zoomOpener = document.querySelector("[data-zoom]");
+    zoomOpener.addEventListener("click", () => {
+      dialog.showModal();
+      revealZoomCell();
+    });
+    document.querySelector("[data-close]").addEventListener("click", () => dialog.close());
+    dialog.addEventListener("close", () => zoomOpener.focus());
+  </script>
+</body>
+</html>

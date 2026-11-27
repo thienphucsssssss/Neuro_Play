@@ -38,6 +38,7 @@ final class SudokuGame extends ChangeNotifier {
   String? _error;
   int _baseElapsedSec = 0;
   int _mistakes = 0;
+  int? _lastCorrectIndex;
   int _nextMoveNo = 1;
   bool _sendingMove = false;
   bool _disposed = false;
@@ -54,6 +55,7 @@ final class SudokuGame extends ChangeNotifier {
   }
 
   int get mistakes => _mistakes;
+  int? get lastCorrectIndex => _lastCorrectIndex;
   bool get hasPendingMove => _pendingMove != null;
   bool get sendingMove => _sendingMove;
   bool get canInteract => _phase == SudokuPhase.playing && !hasPendingMove;
@@ -107,6 +109,7 @@ final class SudokuGame extends ChangeNotifier {
     _result = null;
     _error = null;
     _mistakes = 0;
+    _lastCorrectIndex = null;
     _nextMoveNo = 1;
     _syncClock(0, run: false);
     _changed();
@@ -179,6 +182,7 @@ final class SudokuGame extends ChangeNotifier {
         correct: receipt.correct,
       );
       _mistakes = receipt.mistakes;
+      _lastCorrectIndex = receipt.correct == true ? move.cellIndex : null;
       _nextMoveNo = move.moveNo + 1;
       _pendingMove = null;
       _syncClock(
